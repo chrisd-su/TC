@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coordinate Capture</title>
+    <script src="https://connect-extensions.trimble.com/js/trimble.connect.workspace.api.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 10px; color: #333; }
+        .point-card { border: 1px solid #ccc; padding: 5px; margin-bottom: 5px; border-radius: 4px; }
+        button { background: #0078d4; color: white; border: none; padding: 8px 12px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h3>Point Coordinates</h3>
+    <button id="btn-capture">Capture Measurements</button>
+    <div id="output" style="margin-top: 15px;"></div>
+
+    <script>
+        let workspace;
+
+        // Initialize the Workspace API
+        async function init() {
+            workspace = await TrimbleConnectWorkspace.connect();
+        }
+
+        document.getElementById('btn-capture').addEventListener('click', async () => {
+            const output = document.getElementById('output');
+            output.innerHTML = "Fetching...";
+
+            try {
+                // The core API call to get point markups
+                const points = await workspace.viewer.markup.getSinglePointMarkups();
+                
+                if (points.length === 0) {
+                    output.innerHTML = "No point measurements found.";
+                    return;
+                }
+
+                output.innerHTML = points.map(p => `
+                    <div class="point-card">
+                        <strong>ID:</strong> ${p.id}<br>
+                        <strong>X:</strong> ${p.position.x.toFixed(3)}<br>
+                        <strong>Y:</strong> ${p.position.y.toFixed(3)}<br>
+                        <strong>Z:</strong> ${p.position.z.toFixed(3)}
+                    </div>
+                `).join('');
+            } catch (err) {
+                output.innerHTML = "Error: " + err.message;
+            }
+        });
+
+        init();
+    </script>
+</body>
+</html>
