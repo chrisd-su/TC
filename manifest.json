@@ -1,0 +1,11 @@
+{
+  "name": "Point Coordinate Capture",
+  "id": "com.yourname.coordinatecapture",
+  "version": "1.0.0",
+  "entryPoint": "https://github.com/chrisd-su/TC/blob/main/index.html",
+  "icon": "https://your-hosting-site.com/icon.png",
+  "description": "Capture and display coordinates of point measurements.",
+  "permissions": [
+    "viewer.markup.read"
+  ]
+}
