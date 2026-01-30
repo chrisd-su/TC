@@ -22,6 +22,12 @@
             workspace = await TrimbleConnectWorkspace.connect();
         }
 
+        if (workspace && workspace.viewer) {
+            workspace.viewer.loadModel(...);
+        } else {
+            console.error("Workspace or viewer is not yet initialized");
+        }
+
         document.getElementById('btn-capture').addEventListener('click', async () => {
             const output = document.getElementById('output');
             output.innerHTML = "Fetching...";
@@ -51,4 +57,5 @@
         init();
     </script>
 </body>
+
 </html>
