@@ -11,7 +11,7 @@
 </head>
 <body>
     <h3>Point Coordinates!</h3>
-    <button id="btn-capture">Capture Measurements</button>
+    <button id="btn-capture">Capture Measurements_</button>
     <div id="output" style="margin-top: 15px;"></div>
 
     <script>
@@ -24,10 +24,12 @@
 
         if (workspace && workspace.viewer) {
             workspace.viewer.loadModel(...);
+            btn = document.getElementById('btn-capture');
+            btn.innerText = "in am in the javascript_1";
         } else {
             console.error("Workspace or viewer is not yet initialized");
-            btn = document.getElementById('btn-capture')
-            btn.innerText = "in am in the javascript"
+            btn = document.getElementById('btn-capture');
+            btn.innerText = "in am in the javascript_2";
         }
 
         document.getElementById('btn-capture').addEventListener('click', async () => {
@@ -61,5 +63,6 @@
 </body>
 
 </html>
+
 
 
