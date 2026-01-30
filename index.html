@@ -10,7 +10,7 @@
     </style>
 </head>
 <body>
-    <h3>Point Coordinates</h3>
+    <h3>Point Coordinates!</h3>
     <button id="btn-capture">Capture Measurements</button>
     <div id="output" style="margin-top: 15px;"></div>
 
@@ -26,6 +26,8 @@
             workspace.viewer.loadModel(...);
         } else {
             console.error("Workspace or viewer is not yet initialized");
+            btn = document.getElementById('btn-capture')
+            btn.value = "in am in the javascript"
         }
 
         document.getElementById('btn-capture').addEventListener('click', async () => {
@@ -59,3 +61,4 @@
 </body>
 
 </html>
+
