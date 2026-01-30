@@ -20,6 +20,8 @@
         // Initialize the Workspace API
         async function init() {
             workspace = await TrimbleConnectWorkspace.connect();
+            btn = document.getElementById('btn-capture');
+            btn.innerText = "in am in the ASYNC ";
         }
 
         if (workspace && workspace.viewer) {
@@ -63,6 +65,7 @@
 </body>
 
 </html>
+
 
 
 
