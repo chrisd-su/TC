@@ -1,11 +1,19 @@
 {
-  "name": "Point Coordinate Capture",
-  "id": "com.yourname.coordinatecapture",
+  "name": "Markup Extractor Tool",
+  "id": "com.yourcompany.markupextractor",
   "version": "1.0.0",
-  "entryPoint": "https://chrisd-su.github.io/TC/index.html",
-  "icon": "https://your-hosting-site.com/icon.png",
-  "description": "Capture and display coordinates of point measurements.",
+  "entryPoint": "index.html",
+  "icon": "icon.png",
   "permissions": [
-    "viewer.markup.read"
+    "project:read",
+    "viewer:read"
+  ],
+  "supportedPlatforms": ["web"],
+  "locations": [
+    {
+      "id": "viewer-side-panel",
+      "title": "Markup Data",
+      "toolbarIcon": "icon.png"
+    }
   ]
 }
