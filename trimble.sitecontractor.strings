@@ -23,7 +23,7 @@
 "axis-description"="🟢 Green Axis = Northing (Y),🔴 Red Axis = Easting (X),🔵 Blue Axis = Elevation (Z)";
 "start-control-point"="Start Control Point";
 "end-control-point"="End Control Point";
-"northing"="Northing";
+"northing"="Northings";
 "easting"="Easting";
 "elevation"="Elevation";
 "export-format"="Export Format";
