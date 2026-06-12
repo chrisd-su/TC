@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Async Build</title>
+    <title>CSV Point Scraper - Comprehensive Build</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
@@ -26,13 +26,13 @@
 </head>
 <body>
 
-    <h3>Point Scraper</h3>
+    <h3>Comprehensive Coordinate Layout Scraper</h3>
     <div id="statusBanner">HTML Loaded. Waiting for Script...</div>
     
     <div class="config-container">
         <div class="config-group">
             <label for="unitSelect">Target Unit</label>
-            <select id="unitSelect" onchange="handleConfigChange()" style="width: 150px;">
+            <select id="unitSelect" onchange="handleConfigChange()" style="width: 140px;">
                 <option value="mm">Millimeters (mm)</option>
                 <option value="m">Meters (m)</option>
                 <option value="in">Inches (in)</option>
@@ -42,27 +42,27 @@
         </div>
         <div class="config-group">
             <label for="orderSelect">Coordinate Format</label>
-            <select id="orderSelect" onchange="handleConfigChange()" style="width: 180px;">
+            <select id="orderSelect" onchange="handleConfigChange()" style="width: 170px;">
                 <option value="NEZ" selected>NEZ (Northing, Easting, Z)</option>
                 <option value="ENZ">ENZ (Easting, Northing, Z)</option>
             </select>
         </div>
         <div class="config-group">
             <label for="ptPrefix">Point Prefix (P)</label>
-            <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()" style="width: 75px;">
+            <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()" style="width: 70px;">
         </div>
         <div class="config-group">
             <label for="ptStart">Start ID # (P)</label>
-            <input type="number" id="ptStart" value="100" oninput="handleConfigChange()" style="width: 75px;">
+            <input type="number" id="ptStart" value="100" oninput="handleConfigChange()" style="width: 70px;">
         </div>
         <div class="config-group">
-            <label for="ptDesc">Description (D)</label>
+            <label for="ptDesc">Fallback Desc (D)</label>
             <input type="text" id="ptDesc" value="STAKE OUT" oninput="handleConfigChange()" style="width: 110px;">
         </div>
     </div>
 
     <div class="actions">
-        <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Screen Measurements</button>
+        <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Screen Data</button>
         <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV File</button>
     </div>
 
@@ -77,50 +77,45 @@
             </tr>
         </thead>
         <tbody id="pointTableBody">
-            <tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet. Draw measurements on screen and click Scrape.</td></tr>
+            <tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet. Add data to the screen and click Scrape.</td></tr>
         </tbody>
     </table>
 
     <script>
-        // FAIL-SAFE 1: Change banner immediately without waiting for external libraries
         const statusDiv = document.getElementById("statusBanner");
-        statusDiv.innerText = "Status: Script executing. Loading Trimble SDK library...";
+        statusDiv.innerText = "Status: Script executing. Injecting Trimble library...";
         statusDiv.style.background = "#0288d1";
         statusDiv.style.color = "white";
 
         let rawScrapedData = []; 
         let apiInstance = null;
 
-        // FAIL-SAFE 2: Inject the external Trimble script asynchronously so it can't halt the page layout
         function loadTrimbleSDK() {
             return new Promise((resolve, reject) => {
                 const script = document.createElement("script");
                 script.src = "https://components.connect.trimble.com/trimble-connect-workspace-api/index.js";
                 script.async = true;
                 script.onload = () => resolve();
-                script.onerror = () => reject(new Error("The network blocked the Trimble SDK CDN script link. Check your firewall/adblocker settings."));
+                script.onerror = () => reject(new Error("Network failed to load Trimble SDK script. Check adblockers/firewalls."));
                 document.head.appendChild(script);
             });
         }
 
         async function initExtension() {
             try {
-                // Wait for the asynchronous script injection to complete
                 await loadTrimbleSDK();
-                
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("Trimble SDK downloaded but failed to bind to window frame.");
+                if (!TrimbleSDK) throw new Error("SDK bound check failure.");
                 
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
-                statusDiv.innerText = "Status: Connected to Viewer! Ready to capture measurement parameters.";
+                statusDiv.innerText = "Status: Connected to Viewer! Ready to capture data.";
                 statusDiv.style.background = "#d4edda";
                 statusDiv.style.color = "#155724";
             } catch (error) {
                 statusDiv.innerText = "Connection Error: " + error.message;
                 statusDiv.style.background = "#f8d7da";
                 statusDiv.style.color = "#721c24";
-                console.error("Initialization failure detail:", error);
             }
         }
 
@@ -147,20 +142,20 @@
         }
 
         async function handleScrapeClick() {
-            if (!apiInstance) {
-                alert("Cannot scrape: Extension handshake with Trimble is not established.");
-                return;
-            }
-            if (!apiInstance.markup) {
-                alert("Cannot scrape: Connected to Trimble, but Markup engine is inaccessible.");
+            if (!apiInstance || !apiInstance.markup) {
+                alert("Cannot scrape: Extension handshake with Trimble is incomplete.");
                 return;
             }
 
             try {
                 rawScrapedData = []; 
+                
+                // Concurrent queries fetching points, lines, and text nodes
                 const singlePoints = await apiInstance.markup.getSinglePointMarkups();
                 const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
+                const textMarkups = await apiInstance.markup.getTextMarkups();
 
+                // 1. Single Point Coordinates
                 if (singlePoints && singlePoints.length > 0) {
                     singlePoints.forEach((pt, index) => {
                         let mmCoords = resolveRawMM(pt);
@@ -168,6 +163,7 @@
                     });
                 }
 
+                // 2. Linear Measure Dimensions
                 if (linearMeasurements && linearMeasurements.length > 0) {
                     linearMeasurements.forEach((meas, index) => {
                         if (meas.start) {
@@ -181,15 +177,31 @@
                     });
                 }
 
+                // 3. Text Markups (Annotation Callouts)
+                if (textMarkups && textMarkups.length > 0) {
+                    textMarkups.forEach((tm, index) => {
+                        let mmCoords = resolveRawMM(tm);
+                        // Isolate raw user entry string across API versions
+                        let typedText = tm.text || tm.content || tm.string || tm.value || "";
+                        
+                        rawScrapedData.push({
+                            xMm: mmCoords.x,
+                            yMm: mmCoords.y,
+                            zMm: mmCoords.z,
+                            customDesc: typedText.trim() // Map markup text into custom description parameter
+                        });
+                    });
+                }
+
                 updateTableUI();
 
                 if (rawScrapedData.length === 0) {
-                    alert("Scrape completed, but 0 measurement marks were found on screen.");
+                    alert("Scrape finish: Found 0 active measurements or text markups on-screen.");
                 } else {
-                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} coordinates into your table grid.`;
+                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
                 }
             } catch (err) {
-                alert("Scraper system error: " + err.message);
+                alert("Scraper runtime exception: " + err.message);
             }
         }
 
@@ -215,7 +227,7 @@
             const prefix = document.getElementById("ptPrefix").value;
             let startNum = parseInt(document.getElementById("ptStart").value);
             if (isNaN(startNum)) startNum = 1;
-            const description = document.getElementById("ptDesc").value;
+            const fallbackDescription = document.getElementById("ptDesc").value;
             
             if (formatOrder === "NEZ") {
                 document.getElementById("thCol1").innerText = `Northing - Y (${currentUnit})`;
@@ -241,6 +253,9 @@
 
                 let col1Value = (formatOrder === "NEZ") ? northing : easting;
                 let col2Value = (formatOrder === "NEZ") ? easting : northing;
+                
+                // Override default description if specific markup annotation text was captured
+                let pointDescription = (pt.customDesc !== undefined && pt.customDesc !== "") ? pt.customDesc : fallbackDescription;
 
                 tbody.innerHTML += `
                     <tr>
@@ -248,7 +263,7 @@
                         <td>${col1Value}</td>
                         <td>${col2Value}</td>
                         <td>${elevation}</td>
-                        <td>${description}</td>
+                        <td>${pointDescription}</td>
                     </tr>`;
             });
         }
@@ -259,7 +274,7 @@
 
         function handleExportClick() {
             if (rawScrapedData.length === 0) {
-                alert("Nothing to export! Place measurements on screen and click Scrape first.");
+                alert("Nothing to export! Generate on-screen markers and run a scrape first.");
                 return;
             }
             
@@ -269,7 +284,7 @@
                 const prefix = document.getElementById("ptPrefix").value;
                 let startNum = parseInt(document.getElementById("ptStart").value);
                 if (isNaN(startNum)) startNum = 1;
-                const description = document.getElementById("ptDesc").value;
+                const fallbackDescription = document.getElementById("ptDesc").value;
 
                 let csvContent = "";
                 if (formatOrder === "NEZ") {
@@ -286,8 +301,10 @@
                     
                     let val1 = (formatOrder === "NEZ") ? northing : easting;
                     let val2 = (formatOrder === "NEZ") ? easting : northing;
+                    
+                    let pointDescription = (pt.customDesc !== undefined && pt.customDesc !== "") ? pt.customDesc : fallbackDescription;
 
-                    csvContent += `"${pointNumber}",${val1},${val2},${elevation},"${description}"\n`;
+                    csvContent += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
                 });
 
                 const encodedUri = encodeURI(csvContent);
@@ -298,11 +315,10 @@
                 link.click();
                 document.body.removeChild(link);
             } catch (err) {
-                alert("CSV generator execution crash: " + err.message);
+                alert("CSV compile crash error: " + err.message);
             }
         }
 
-        // Initialize connection asynchronously
         initExtension();
     </script>
 </body>
