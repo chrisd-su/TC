@@ -2,48 +2,38 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Secure Blob Build</title>
+    <title>CSV Point Scraper - Line Length Build</title>
     <style>
- /* Responsive Panel Configurations */
-.config-container { 
-    background: #f0f4f8; 
-    padding: 12px; 
-    border-radius: 4px; 
-    margin-bottom: 15px; 
-    display: flex; 
-    flex-direction: column; /* Stacks controls vertically instead of crowding a single line */
-    gap: 10px; 
-}
-.config-group { 
-    display: flex; 
-    align-items: center; 
-    justify-content: space-between; /* Keeps inputs and labels balanced */
-    width: 100%; 
-}
-.config-group label { 
-    font-size: 11px; 
-    font-weight: bold; 
-    color: #34495e; 
-    margin-bottom: 0; 
-}
-.config-group select, .config-group input { 
-    padding: 6px; 
-    font-size: 13px; 
-    border-radius: 4px; 
-    border: 1px solid #ccc; 
-    width: 60%; /* Dynamically utilizes the default sidebar container width */
-}
+        body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
+        h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #9e9e9e; color: white; }
+        
+        /* Optimized Responsive Config Panel Layout */
+        .config-container { background: #f0f4f8; padding: 12px; border-radius: 4px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .config-group { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+        .config-group label { font-size: 11px; font-weight: bold; color: #34495e; margin-bottom: 0; }
+        .config-group select, .config-group input { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; width: 60%; }
+        
+        .actions { margin-bottom: 15px; display: flex; gap: 10px; }
+        button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; flex: 1; }
+        button:hover { background: #01579b; }
+        button.success { background: #2e7d32; color: white; }
+        button.success:hover { background: #1b5e20; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        th { background-color: #f4f4f4; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h3>Points to CSV Scraper</h3>
+    <h3>Point & Line Measurement Scraper to CSV</h3>
     <div id="statusBanner">HTML Loaded. Waiting for Script...</div>
     
     <div class="config-container">
         <div class="config-group">
             <label for="unitSelect">Target Unit</label>
-            <select id="unitSelect" onchange="handleConfigChange()" style="width: 140px;">
+            <select id="unitSelect" onchange="handleConfigChange()">
                 <option value="mm">Millimeters (mm)</option>
                 <option value="m">Meters (m)</option>
                 <option value="in">Inches (in)</option>
@@ -53,34 +43,34 @@
         </div>
         <div class="config-group">
             <label for="orderSelect">Coordinate Format</label>
-            <select id="orderSelect" onchange="handleConfigChange()" style="width: 170px;">
+            <select id="orderSelect" onchange="handleConfigChange()">
                 <option value="NEZ" selected>NEZ (Northing, Easting, Z)</option>
                 <option value="ENZ">ENZ (Easting, Northing, Z)</option>
             </select>
         </div>
         <div class="config-group">
             <label for="ptPrefix">Point Prefix (P)</label>
-            <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()" style="width: 70px;">
+            <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()">
         </div>
         <div class="config-group">
             <label for="ptStart">Start ID # (P)</label>
-            <input type="number" id="ptStart" value="100" oninput="handleConfigChange()" style="width: 70px;">
+            <input type="number" id="ptStart" value="100" oninput="handleConfigChange()">
         </div>
         <div class="config-group">
             <label for="ptDesc">Fallback Desc (D)</label>
-            <input type="text" id="ptDesc" value="STAKE OUT" oninput="handleConfigChange()" style="width: 110px;">
+            <input type="text" id="ptDesc" value="STAKE OUT" oninput="handleConfigChange()">
         </div>
     </div>
 
     <div class="actions">
         <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Screen Data</button>
-        <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV File</button>
+        <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV</button>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th>Point Number (P)</th>
+                <th>Point ID (P)</th>
                 <th id="thCol1">Northing - Y</th>
                 <th id="thCol2">Easting - X</th>
                 <th id="thCol3">Elevation - Z</th>
@@ -165,43 +155,47 @@
                 const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
                 const textMarkups = await apiInstance.markup.getTextMarkups();
 
+                // 1. Process Single Points
                 if (singlePoints && singlePoints.length > 0) {
                     singlePoints.forEach((pt) => {
                         let mmCoords = resolveRawMM(pt);
-                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z });
+                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z, type: "point" });
                     });
                 }
 
+                // 2. Process Linear Measures (With Real-Time 3D Length Calculation)
                 if (linearMeasurements && linearMeasurements.length > 0) {
                     linearMeasurements.forEach((meas) => {
-                        if (meas.start) {
+                        if (meas.start && meas.end) {
                             let startCoords = resolveRawMM(meas.start);
-                            rawScrapedData.push({ xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
-                        }
-                        if (meas.end) {
                             let endCoords = resolveRawMM(meas.end);
-                            rawScrapedData.push({ xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
+                            
+                            // 3D Pythagorean Distance formula: sqrt(dx^2 + dy^2 + dz^2)
+                            let dx = endCoords.x - startCoords.x;
+                            let dy = endCoords.y - startCoords.y;
+                            let dz = endCoords.z - startCoords.z;
+                            let calcLengthMm = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                            // Store shared length data on both coordinate entries
+                            rawScrapedData.push({ xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedData.push({ xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z, type: "line", lineLenMm: calcLengthMm });
                         }
                     });
                 }
 
+                // 3. Process Text Callouts
                 if (textMarkups && textMarkups.length > 0) {
                     textMarkups.forEach((tm) => {
                         let mmCoords = resolveRawMM(tm);
                         let typedText = tm.text || tm.content || tm.string || tm.value || "";
-                        rawScrapedData.push({
-                            xMm: mmCoords.x,
-                            yMm: mmCoords.y,
-                            zMm: mmCoords.z,
-                            customDesc: typedText.trim()
-                        });
+                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z, type: "text", customDesc: typedText.trim() });
                     });
                 }
 
                 updateTableUI();
 
                 if (rawScrapedData.length === 0) {
-                    alert("Scrape finish: Found 0 active measurements or text markups on-screen.");
+                    alert("Scrape finish: Found 0 active markers on-screen.");
                 } else {
                     document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
                 }
@@ -251,7 +245,6 @@
 
             rawScrapedData.forEach((pt, index) => {
                 let pointNumber = prefix + (startNum + index);
-                
                 let northing = convertValue(pt.yMm, currentUnit);
                 let easting = convertValue(pt.xMm, currentUnit);
                 let elevation = convertValue(pt.zMm, currentUnit);
@@ -259,7 +252,13 @@
                 let col1Value = (formatOrder === "NEZ") ? northing : easting;
                 let col2Value = (formatOrder === "NEZ") ? easting : northing;
                 
-                let pointDescription = (pt.customDesc !== undefined && pt.customDesc !== "") ? pt.customDesc : fallbackDescription;
+                // Determine description based on data type rules
+                let pointDescription = fallbackDescription;
+                if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                    pointDescription = `Line: ${convertValue(pt.lineLenMm, currentUnit)} ${currentUnit}`;
+                } else if (pt.type === "text" && pt.customDesc) {
+                    pointDescription = pt.customDesc;
+                }
 
                 tbody.innerHTML += `
                     <tr>
@@ -276,10 +275,9 @@
             updateTableUI();
         }
 
-        // CRITICAL UPDATE: Uses Blob stream structure to bypass sandboxed iframe download block
         function handleExportClick() {
             if (rawScrapedData.length === 0) {
-                alert("Nothing to export! Place measurements on screen and click Scrape first.");
+                alert("Nothing to export! Generate on-screen markers and run a scrape first.");
                 return;
             }
             
@@ -307,23 +305,24 @@
                     let val1 = (formatOrder === "NEZ") ? northing : easting;
                     let val2 = (formatOrder === "NEZ") ? easting : northing;
                     
-                    let pointDescription = (pt.customDesc !== undefined && pt.customDesc !== "") ? pt.customDesc : fallbackDescription;
+                    let pointDescription = fallbackDescription;
+                    if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                        pointDescription = `Line: ${convertValue(pt.lineLenMm, currentUnit)} ${currentUnit}`;
+                    } else if (pt.type === "text" && pt.customDesc) {
+                        pointDescription = pt.customDesc;
+                    }
 
                     csvString += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
                 });
 
-                // Generate a true Binary Large Object representing the file data
                 const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
                 const blobUrl = URL.createObjectURL(blob);
-                
                 const link = document.createElement("a");
                 link.setAttribute("href", blobUrl);
                 link.setAttribute("download", `scraped_${formatOrder.toLowerCase()}_${currentUnit}.csv`);
                 
                 document.body.appendChild(link);
                 link.click();
-                
-                // Clean memory references instantly post-execution
                 document.body.removeChild(link);
                 URL.revokeObjectURL(blobUrl);
             } catch (err) {
