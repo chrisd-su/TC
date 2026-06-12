@@ -2,65 +2,92 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Tracking Build</title>
+    <title>CSV Point Scraper - NEZ/ENZ Build</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
         #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #9e9e9e; color: white; }
-        .config-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; background: #f0f4f8; padding: 10px; border-radius: 4px; }
-        label { font-size: 13px; font-weight: bold; color: #34495e; }
-        select { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; width: 180px; }
+        
+        /* Configuration Panel Layout */
+        .config-container { background: #f0f4f8; padding: 12px; border-radius: 4px; margin-bottom: 15px; }
+        .config-group { display: inline-block; margin-right: 12px; margin-bottom: 8px; vertical-align: top; }
+        .config-group label { display: block; font-size: 11px; font-weight: bold; color: #34495e; margin-bottom: 4px; }
+        .config-group select, .config-group input { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        
         .actions { margin-bottom: 15px; display: flex; gap: 10px; }
         button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #01579b; }
         button.success { background: #2e7d32; }
         button.success:hover { background: #1b5e20; }
+        
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
-        th { background-color: #f4f4f4; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        th { background-color: #f4f4f4; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h3>Screen Measurement Scraper</h3>
+    <h3>Flexible Coordinate Layout Scraper</h3>
     <div id="statusBanner">HTML Loaded. Waiting for Script...</div>
     
-    <div class="config-row">
-        <label for="unitSelect">Target Output Unit:</label>
-        <select id="unitSelect" onchange="handleUnitChange()">
-            <option value="mm">Millimeters (mm)</option>
-            <option value="m">Meters (m)</option>
-            <option value="in">Inches (in)</option>
-            <option value="ft">International Feet (ft)</option>
-            <option value="usft">US Survey Feet (USft)</option>
-        </select>
+    <div class="config-container">
+        <div class="config-group">
+            <label for="unitSelect">Target Unit</label>
+            <select id="unitSelect" onchange="handleConfigChange()" style="width: 150px;">
+                <option value="mm">Millimeters (mm)</option>
+                <option value="m">Meters (m)</option>
+                <option value="in">Inches (in)</option>
+                <option value="ft">International Feet (ft)</option>
+                <option value="usft" selected>US Survey Feet (USft)</option>
+            </select>
+        </div>
+        <div class="config-group">
+            <label for="orderSelect">Coordinate Format</label>
+            <select id="orderSelect" onchange="handleConfigChange()" style="width: 180px;">
+                <option value="NEZ" selected>NEZ (Northing, Easting, Z)</option>
+                <option value="ENZ">ENZ (Easting, Northing, Z)</option>
+            </select>
+        </div>
+        <div class="config-group">
+            <label for="ptPrefix">Point Prefix (P)</label>
+            <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()" style="width: 75px;">
+        </div>
+        <div class="config-group">
+            <label for="ptStart">Start ID # (P)</label>
+            <input type="number" id="ptStart" value="100" oninput="handleConfigChange()" style="width: 75px;">
+        </div>
+        <div class="config-group">
+            <label for="ptDesc">Description (D)</label>
+            <input type="text" id="ptDesc" value="STAKE OUT" oninput="handleConfigChange()" style="width: 110px;">
+        </div>
     </div>
 
     <div class="actions">
         <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Screen Measurements</button>
-        <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV</button>
+        <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV File</button>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th>Measurement ID / Name</th>
-                <th id="thX">X (mm)</th>
-                <th id="thY">Y (mm)</th>
-                <th id="thZ">Z (mm)</th>
+                <th>Point Number (P)</th>
+                <th id="thCol1">Northing - Y</th>
+                <th id="thCol2">Easting - X</th>
+                <th id="thCol3">Elevation - Z</th>
+                <th>Description (D)</th>
             </tr>
         </thead>
         <tbody id="pointTableBody">
-            <tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet. Place measurements on screen and click Scrape.</td></tr>
+            <tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet. Draw measurements on screen and click Scrape.</td></tr>
         </tbody>
     </table>
 
     <script>
-        // Execution Verification: This runs immediately when the script block initializes
+        // Execution Initializer Signal
         (function() {
             const banner = document.getElementById("statusBanner");
-            banner.innerText = "Script Block Executing... Attempting Handshake.";
+            banner.innerText = "Script Block Executing... Connecting to Trimble Viewer.";
             banner.style.background = "#0288d1";
             banner.style.color = "white";
         })();
@@ -72,11 +99,11 @@
             const statusDiv = document.getElementById("statusBanner");
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("Trimble SDK CDN library failed to load.");
+                if (!TrimbleSDK) throw new Error("Trimble SDK library not found.");
                 
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
-                statusDiv.innerText = "Status: Connected to Viewer! Ready to scrape.";
+                statusDiv.innerText = "Status: Connected to Viewer! Ready to capture measurement parameters.";
                 statusDiv.style.background = "#d4edda";
                 statusDiv.style.color = "#155724";
             } catch (error) {
@@ -127,116 +154,4 @@
                     singlePoints.forEach((pt, index) => {
                         let mmCoords = resolveRawMM(pt);
                         rawScrapedData.push({
-                            name: `Coordinate Point ${pt.id || index + 1}`,
-                            xMm: mmCoords.x,
-                            yMm: mmCoords.y,
-                            zMm: mmCoords.z
-                        });
-                    });
-                }
-
-                if (linearMeasurements && linearMeasurements.length > 0) {
-                    linearMeasurements.forEach((meas, index) => {
-                        if (meas.start) {
-                            let startCoords = resolveRawMM(meas.start);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (Start)`, xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
-                        }
-                        if (meas.end) {
-                            let endCoords = resolveRawMM(meas.end);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (End)`, xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
-                        }
-                    });
-                }
-
-                updateTableUI();
-
-                if (rawScrapedData.length === 0) {
-                    alert("Scrape processed, but 0 active measurement markers were discovered on screen.");
-                } else {
-                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} coordinate markers successfully.`;
-                }
-            } catch (err) {
-                alert("Scraper system error: " + err.message);
-            }
-        }
-
-        function convertValue(valInMm, targetUnit) {
-            let num = parseFloat(valInMm);
-            if (isNaN(num)) return "0.0";
-            
-            switch(targetUnit) {
-                case "m":    return (num / 1000).toFixed(3);        // mm to meters
-                case "in":   return (num / 25.4).toFixed(2);        // mm to inches
-                case "ft":   return (num / 304.8).toFixed(3);       // mm to International Feet
-                case "usft": return (num / 304.8006096).toFixed(3); // mm to US Survey Feet
-                case "mm":
-                default:     return num.toFixed(1);                 // remain mm
-            }
-        }
-
-        function updateTableUI() {
-            const tbody = document.getElementById("pointTableBody");
-            const currentUnit = document.getElementById("unitSelect").value;
-            
-            document.getElementById("thX").innerText = `X (${currentUnit})`;
-            document.getElementById("thY").innerText = `Y (${currentUnit})`;
-            document.getElementById("thZ").innerText = `Z (${currentUnit})`;
-
-            tbody.innerHTML = "";
-            if (rawScrapedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
-                return;
-            }
-
-            rawScrapedData.forEach(pt => {
-                let displayX = convertValue(pt.xMm, currentUnit);
-                let displayY = convertValue(pt.yMm, currentUnit);
-                let displayZ = convertValue(pt.zMm, currentUnit);
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><b>${pt.name}</b></td>
-                        <td>${displayX}</td>
-                        <td>${displayY}</td>
-                        <td>${displayZ}</td>
-                    </tr>`;
-            });
-        }
-
-        function handleUnitChange() {
-            updateTableUI();
-        }
-
-        function handleExportClick() {
-            if (rawScrapedData.length === 0) {
-                alert("Nothing to export! Put measurements on screen and click Scrape first.");
-                return;
-            }
-            
-            try {
-                const currentUnit = document.getElementById("unitSelect").value;
-                let csvContent = `data:text/csv;charset=utf-8,Point Name,X (${currentUnit}),Y (${currentUnit}),Z (${currentUnit})\n`;
-                
-                rawScrapedData.forEach(pt => {
-                    let csvX = convertValue(pt.xMm, currentUnit);
-                    let csvY = convertValue(pt.yMm, currentUnit);
-                    let csvZ = convertValue(pt.zMm, currentUnit);
-                    csvContent += `"${pt.name}",${csvX},${csvY},${csvZ}\n`;
-                });
-
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `scraped_measurements_${currentUnit}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            } catch (err) {
-                alert("CSV generator crash: " + err.message);
-            }
-        }
-
-        initExtension();
-    </script>
-</body>
-</html>
+                            xMm: mmCoords.
