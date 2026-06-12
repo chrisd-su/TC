@@ -2,17 +2,17 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Logger</title>
+    <title>CSV Point Scraper</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
         #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #666; }
         .actions { margin-bottom: 15px; display: flex; gap: 10px; }
-        button { background: #007bc4; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
-        button:hover { background: #005a92; }
-        button.secondary { background: #666; }
-        button.secondary:hover { background: #444; }
+        button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #01579b; }
+        button.success { background: #2e7d32; }
+        button.success:hover { background: #1b5e20; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
         th { background-color: #f4f4f4; }
@@ -20,136 +20,150 @@
 </head>
 <body>
 
-    <h3>Point Logger Extension</h3>
+    <h3>Screen Measurement Scraper</h3>
     <div id="statusBanner">Status: Waiting for initialization...</div>
     
     <div class="actions">
-        <button id="logBtn">Log Selected Point</button>
-        <button id="exportBtn" class="secondary">Export CSV</button>
+        <button id="scrapeBtn">Scrape All Screen Measurements</button>
+        <button id="exportBtn" class="success">Export CSV</button>
     </div>
 
     <table>
         <thead>
             <tr>
-                <th>Label</th>
-                <th>X (m)</th>
-                <th>Y (m)</th>
-                <th>Z (m)</th>
+                <th>Measurement ID / Type</th>
+                <th>X (mm)</th>
+                <th>Y (mm)</th>
+                <th>Z (mm)</th>
             </tr>
         </thead>
         <tbody id="pointTableBody">
-            <tr><td colspan="4" style="text-align:center; color:#999;">No points logged yet.</td></tr>
+            <tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet. Placed native measurements on screen and click Scrape.</td></tr>
         </tbody>
     </table>
 
     <script>
-        let loggedPoints = [];
+        let scrapedPoints = [];
         let apiInstance = null;
         const statusDiv = document.getElementById("statusBanner");
 
-        // Dynamic handshake launcher
         async function initExtension() {
-            statusDiv.innerText = "Status: Connecting to Trimble Connect...";
-            statusDiv.style.background = "#fff3cd";
-            statusDiv.style.color = "#856404";
-
             try {
-                // Resolves naming variance across different CDN builds robustly
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                
-                if (!TrimbleSDK) {
-                    throw new Error("Trimble SDK library script failed to load from CDN.");
-                }
+                if (!TrimbleSDK) throw new Error("Trimble SDK failed to bind.");
 
-                // Establish postMessage communication channel with Trimble Connect
-                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {
-                    console.log("Trimble Event:", event, args);
-                }, 30000); // 30-second handshake timeout limit
+                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
 
-                statusDiv.innerText = "Status: Connected to Trimble Connect Successfully!";
+                statusDiv.innerText = "Status: Connected to Viewer! Ready to scrape.";
                 statusDiv.style.background = "#d4edda";
                 statusDiv.style.color = "#155724";
             } catch (error) {
-                console.error("Handshake Error:", error);
                 statusDiv.innerText = "Connection Failed: " + error.message;
                 statusDiv.style.background = "#f8d7da";
                 statusDiv.style.color = "#721c24";
             }
         }
 
-        document.getElementById("logBtn").addEventListener("click", async () => {
-            if (!apiInstance) {
-                alert("Extension is not connected to the viewer application yet.");
-                return;
-            }
-
-            // Ensure the extension has access to the 3D Viewer module
-            if (!apiInstance.viewer) {
-                alert("Connected to Trimble Connect, but cannot find the 3D Viewer canvas. Ensure you are executing this inside a project tab where a 3D model is currently open.");
+        // Core Scraper Engine
+        document.getElementById("scrapeBtn").addEventListener("click", async () => {
+            if (!apiInstance || !apiInstance.markup) {
+                alert("Extension markup engine is not fully initialized.");
                 return;
             }
 
             try {
-                const selection = await apiInstance.viewer.getSelection();
+                scrapedPoints = []; // Reset old data entries
                 
-                if (!selection || !selection.objectRuntimeIds || selection.objectRuntimeIds.length === 0) {
-                    alert("Please select an object or vertex point on the 3D model first.");
-                    return;
+                // 1. Fetch native Single Point coordinates on screen
+                const singlePoints = await apiInstance.markup.getSinglePointMarkups();
+                
+                // 2. Fetch standard Dimension Line / Distance strings on screen
+                const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
+
+                // Process Single Point measurements
+                if (singlePoints && singlePoints.length > 0) {
+                    singlePoints.forEach((pt, index) => {
+                        // Trimble markup positions return natively in millimeters
+                        let posX = pt.positionX ?? (pt.position ? pt.position.x : 0);
+                        let posY = pt.positionY ?? (pt.position ? pt.position.y : 0);
+                        let posZ = pt.positionZ ?? (pt.position ? pt.position.z : 0);
+
+                        scrapedPoints.push({
+                            name: `Coordinate Point ${pt.id || index + 1}`,
+                            x: parseFloat(posX).toFixed(1),
+                            y: parseFloat(posY).toFixed(1),
+                            z: parseFloat(posZ).toFixed(1)
+                        });
+                    });
                 }
 
-                const objects = await apiInstance.viewer.getObjectProperties(selection.modelId, selection.objectRuntimeIds);
-                
-                if (objects && objects.length > 0 && objects[0].position) {
-                    const pos = objects[0].position;
-                    const label = prompt("Enter point label:", `Point ${loggedPoints.length + 1}`) || "Unnamed Point";
-                    
-                    loggedPoints.push({
-                        label: label,
-                        x: pos.x.toFixed(3),
-                        y: pos.y.toFixed(3),
-                        z: pos.z.toFixed(3)
+                // Process Linear Dimension lines (grabs start and end vectors of your measurements)
+                if (linearMeasurements && linearMeasurements.length > 0) {
+                    linearMeasurements.forEach((meas, index) => {
+                        if (meas.start) {
+                            scrapedPoints.push({
+                                name: `Dim Line ${meas.id || index + 1} (Start)`,
+                                x: parseFloat(meas.start.positionX).toFixed(1),
+                                y: parseFloat(meas.start.positionY).toFixed(1),
+                                z: parseFloat(meas.start.positionZ).toFixed(1)
+                            });
+                        }
+                        if (meas.end) {
+                            scrapedPoints.push({
+                                name: `Dim Line ${meas.id || index + 1} (End)`,
+                                x: parseFloat(meas.end.positionX).toFixed(1),
+                                y: parseFloat(meas.end.positionY).toFixed(1),
+                                z: parseFloat(meas.end.positionZ).toFixed(1)
+                            });
+                        }
                     });
-                    
-                    updateTable();
-                } else {
-                    alert("Unable to fetch explicit coordinates for this selection block.");
                 }
+
+                updateTableUI();
+
+                if (scrapedPoints.length === 0) {
+                    alert("Scrape complete, but found 0 active measurements on your screen. Drop some measurement points first!");
+                } else {
+                    statusDiv.innerText = `Status: Successfully scraped ${scrapedPoints.length} point coordinates!`;
+                }
+
             } catch (err) {
-                console.error(err);
-                alert("Error attempting to map coordinate vectors.");
+                console.error("Scraper crash details:", err);
+                alert("Error while executing screen scrape check console logs.");
             }
         });
 
-        function updateTable() {
+        function updateTableUI() {
             const tbody = document.getElementById("pointTableBody");
             tbody.innerHTML = "";
-            if(loggedPoints.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No points logged yet.</td></tr>`;
+            
+            if (scrapedPoints.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
                 return;
             }
-            loggedPoints.forEach(pt => {
-                tbody.innerHTML += `<tr><td><b>${pt.label}</b></td><td>${pt.x}</td><td>${pt.y}</td><td>${pt.z}</td></tr>`;
+
+            scrapedPoints.forEach(pt => {
+                tbody.innerHTML += `<tr><td><b>${pt.name}</b></td><td>${pt.x}</td><td>${pt.y}</td><td>${pt.z}</td></tr>`;
             });
         }
 
         document.getElementById("exportBtn").addEventListener("click", () => {
-            if (loggedPoints.length === 0) return alert("No logged coordinate data found to export.");
+            if (scrapedPoints.length === 0) return alert("No scraped coordinates found to export.");
             
-            let csvContent = "data:text/csv;charset=utf-8,Label,X (meters),Y (meters),Z (meters)\n";
-            loggedPoints.forEach(pt => {
-                csvContent += `"${pt.label}",${pt.x},${pt.y},${pt.z}\n`;
+            let csvContent = "data:text/csv;charset=utf-8,Point Name,X (mm),Y (mm),Z (mm)\n";
+            scrapedPoints.forEach(pt => {
+                csvContent += `"${pt.name}",${pt.x},${pt.y},${pt.z}\n`;
             });
 
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "trimble_connect_measurements.csv");
+            link.setAttribute("download", "scraped_trimble_measurements.csv");
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         });
 
-        // Initialize connection
         initExtension();
     </script>
 </body>
