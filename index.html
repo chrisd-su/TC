@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Auto Units</title>
+    <title>CSV Point Scraper - Auto Units Fixed</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
@@ -56,7 +56,7 @@
     </table>
 
     <script>
-        let rawScrapedData = []; // Keeps raw accurate mm values from API
+        let rawScrapedData = []; 
         let apiInstance = null;
         const statusDiv = document.getElementById("statusBanner");
         const unitDropdown = document.getElementById("unitSelect");
@@ -67,142 +67,4 @@
                 if (!TrimbleSDK) throw new Error("Trimble SDK failed to bind.");
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 statusDiv.innerText = "Status: Connected to Viewer! Ready to scrape.";
-                statusDiv.style.background = "#d4edda";
-                statusDiv.style.color = "#155724";
-            } catch (error) {
-                statusDiv.innerText = "Connection Failed: " + error.message;
-                statusDiv.style.background = "#f8d7da";
-                statusDiv.style.color = "#721c24";
-            }
-        }
-
-        // Helper function to handle fallback checking on coordinate arrays
-        function resolveRawMM(pt) {
-            if (pt.positionX !== undefined && pt.positionX !== null) return { x: pt.positionX, y: pt.positionY, z: pt.positionZ };
-            if (pt.position && pt.position.x !== undefined) return { x: pt.position.x, y: pt.position.y, z: pt.position.z };
-            if (pt.pick && pt.pick.positionX !== undefined) return { x: pt.pick.positionX, y: pt.pick.positionY, z: pt.pick.positionZ };
-            if (pt.x !== undefined && pt.x !== null) return { x: pt.x, y: pt.y, z: pt.z };
-            return { x: 0, y: 0, z: 0 };
-        }
-
-        // Listens to dropdown changes to immediately redraw the table values
-        unitDropdown.addEventListener("change", () => {
-            updateTableUI();
-        });
-
-        document.getElementById("scrapeBtn").addEventListener("click", async () => {
-            if (!apiInstance || !apiInstance.markup) {
-                alert("Extension markup engine is not fully initialized.");
-                return;
-            }
-
-            try {
-                rawScrapedData = []; 
-                const singlePoints = await apiInstance.markup.getSinglePointMarkups();
-                const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
-
-                if (singlePoints && singlePoints.length > 0) {
-                    singlePoints.forEach((pt, index) => {
-                        let mmCoords = resolveRawMM(pt);
-                        rawScrapedData.push({
-                            name: `Coordinate Point ${pt.id || index + 1}`,
-                            xMm: mmCoords.x,
-                            yMm: mmCoords.y,
-                            zMm: mmCoords.z
-                        });
-                    });
-                }
-
-                if (linearMeasurements && linearMeasurements.length > 0) {
-                    linearMeasurements.forEach((meas, index) => {
-                        if (meas.start) {
-                            let startCoords = resolveRawMM(meas.start);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (Start)`, xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
-                        }
-                        if (meas.end) {
-                            let endCoords = resolveRawMM(meas.end);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (End)`, xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
-                        }
-                    });
-                }
-
-                updateTableUI();
-
-                if (rawScrapedData.length === 0) {
-                    alert("No active measurements found on screen.");
-                } else {
-                    statusDiv.innerText = `Status: Scraped ${rawScrapedData.length} coordinate markers.`;
-                }
-            } catch (err) {
-                console.error(err);
-                alert("Error during scene compilation query.");
-            }
-        });
-
-        // Handles unit mathematical conversions on the fly
-        function convertValue(valInMm, targetUnit) {
-            switch(targetUnit) {
-                case "m":  return (valInMm / 1000).toFixed(3);   // mm to meters
-                case "in": return (valInMm / 25.4).toFixed(2);   // mm to inches
-                case "ft": return (valInMm / 304.8).toFixed(3);  // mm to decimal feet
-                case "mm":
-                default:   return parseFloat(valInMm).toFixed(1); // remain mm
-            }
-        }
-
-        function updateTableUI() {
-            const tbody = document.getElementById("pointTableBody");
-            const currentUnit = unitDropdown.value;
-            
-            // Sync Table Header Text with your chosen unit selector
-            document.getElementById("thX").innerText = `X (${currentUnit})`;
-            document.getElementById("thY").innerText = `Y (${currentUnit})`;
-            document.getElementById("thZ").innerText = `Z (${currentUnit})`;
-
-            tbody.innerHTML = "";
-            if (rawScrapedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
-                return;
-            }
-
-            rawScrapedData.forEach(pt => {
-                let displayX = convertValue(pt.xMm, currentUnit);
-                let displayY = convertValue(pt.yMm, currentUnit);
-                let displayZ = convertValue(pt.zMm, currentUnit);
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><b>${pt.name}</b></td>
-                        <td>${displayX}</td>
-                        <td>${displayY}</td>
-                        <td>${displayZ}</td>
-                    </tr>`;
-            });
-        }
-
-        document.getElementById("exportBtn").addEventListener("click", () => {
-            if (rawScrapedData.length === 0) return alert("No coordinate parameters stored to process.");
-            
-            const currentUnit = unitDropdown.value;
-            let csvContent = `data:text/csv;charset=utf-8,Point Name,X (${currentUnit}),Y (${currentUnit}),Z (${currentUnit})\n`;
-            
-            rawScrapedData.forEach(pt => {
-                let csvX = convertValue(pt.xMm, currentUnit);
-                let csvY = convertValue(pt.yMm, currentUnit);
-                let csvZ = convertValue(pt.zMm, currentUnit);
-                csvContent += `"${pt.name}",${csvX},${csvY},${csvZ}\n`;
-            });
-
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `scraped_measurements_${currentUnit}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        });
-
-        initExtension();
-    </script>
-</body>
-</html>
+                statusDiv.
