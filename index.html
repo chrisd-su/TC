@@ -2,14 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - NEZ/ENZ Build</title>
-    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
+    <title>CSV Point Scraper - Async Build</title>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
         #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #9e9e9e; color: white; }
         
-        /* Configuration Panel Layout */
         .config-container { background: #f0f4f8; padding: 12px; border-radius: 4px; margin-bottom: 15px; }
         .config-group { display: inline-block; margin-right: 12px; margin-bottom: 8px; vertical-align: top; }
         .config-group label { display: block; font-size: 11px; font-weight: bold; color: #34495e; margin-bottom: 4px; }
@@ -28,7 +26,7 @@
 </head>
 <body>
 
-    <h3>Point Coordinate Scraper</h3>
+    <h3>Flexible Coordinate Layout Scraper</h3>
     <div id="statusBanner">HTML Loaded. Waiting for Script...</div>
     
     <div class="config-container">
@@ -84,22 +82,34 @@
     </table>
 
     <script>
-        // Execution Initializer Signal
-        (function() {
-            const banner = document.getElementById("statusBanner");
-            banner.innerText = "Script Block Executing... Connecting to Trimble Viewer.";
-            banner.style.background = "#0288d1";
-            banner.style.color = "white";
-        })();
+        // FAIL-SAFE 1: Change banner immediately without waiting for external libraries
+        const statusDiv = document.getElementById("statusBanner");
+        statusDiv.innerText = "Status: Script executing. Loading Trimble SDK library...";
+        statusDiv.style.background = "#0288d1";
+        statusDiv.style.color = "white";
 
         let rawScrapedData = []; 
         let apiInstance = null;
 
+        // FAIL-SAFE 2: Inject the external Trimble script asynchronously so it can't halt the page layout
+        function loadTrimbleSDK() {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement("script");
+                script.src = "https://components.connect.trimble.com/trimble-connect-workspace-api/index.js";
+                script.async = true;
+                script.onload = () => resolve();
+                script.onerror = () => reject(new Error("The network blocked the Trimble SDK CDN script link. Check your firewall/adblocker settings."));
+                document.head.appendChild(script);
+            });
+        }
+
         async function initExtension() {
-            const statusDiv = document.getElementById("statusBanner");
             try {
+                // Wait for the asynchronous script injection to complete
+                await loadTrimbleSDK();
+                
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("Trimble SDK library not found.");
+                if (!TrimbleSDK) throw new Error("Trimble SDK downloaded but failed to bind to window frame.");
                 
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
@@ -107,9 +117,10 @@
                 statusDiv.style.background = "#d4edda";
                 statusDiv.style.color = "#155724";
             } catch (error) {
-                statusDiv.innerText = "Connection Failed: " + error.message;
+                statusDiv.innerText = "Connection Error: " + error.message;
                 statusDiv.style.background = "#f8d7da";
                 statusDiv.style.color = "#721c24";
+                console.error("Initialization failure detail:", error);
             }
         }
 
@@ -153,5 +164,146 @@
                 if (singlePoints && singlePoints.length > 0) {
                     singlePoints.forEach((pt, index) => {
                         let mmCoords = resolveRawMM(pt);
-                        rawScrapedData.push({
-                            xMm: mmCoords.
+                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z });
+                    });
+                }
+
+                if (linearMeasurements && linearMeasurements.length > 0) {
+                    linearMeasurements.forEach((meas, index) => {
+                        if (meas.start) {
+                            let startCoords = resolveRawMM(meas.start);
+                            rawScrapedData.push({ xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
+                        }
+                        if (meas.end) {
+                            let endCoords = resolveRawMM(meas.end);
+                            rawScrapedData.push({ xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
+                        }
+                    });
+                }
+
+                updateTableUI();
+
+                if (rawScrapedData.length === 0) {
+                    alert("Scrape completed, but 0 measurement marks were found on screen.");
+                } else {
+                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} coordinates into your table grid.`;
+                }
+            } catch (err) {
+                alert("Scraper system error: " + err.message);
+            }
+        }
+
+        function convertValue(valInMm, targetUnit) {
+            let num = parseFloat(valInMm);
+            if (isNaN(num)) return "0.000";
+            
+            switch(targetUnit) {
+                case "m":    return (num / 1000).toFixed(3);
+                case "in":   return (num / 25.4).toFixed(2);
+                case "ft":   return (num / 304.8).toFixed(3);
+                case "usft": return (num / 304.8006096).toFixed(3);
+                case "mm":
+                default:     return num.toFixed(1);
+            }
+        }
+
+        function updateTableUI() {
+            const tbody = document.getElementById("pointTableBody");
+            const currentUnit = document.getElementById("unitSelect").value;
+            const formatOrder = document.getElementById("orderSelect").value;
+            
+            const prefix = document.getElementById("ptPrefix").value;
+            let startNum = parseInt(document.getElementById("ptStart").value);
+            if (isNaN(startNum)) startNum = 1;
+            const description = document.getElementById("ptDesc").value;
+            
+            if (formatOrder === "NEZ") {
+                document.getElementById("thCol1").innerText = `Northing - Y (${currentUnit})`;
+                document.getElementById("thCol2").innerText = `Easting - X (${currentUnit})`;
+            } else {
+                document.getElementById("thCol1").innerText = `Easting - X (${currentUnit})`;
+                document.getElementById("thCol2").innerText = `Northing - Y (${currentUnit})`;
+            }
+            document.getElementById("thCol3").innerText = `Elevation - Z (${currentUnit})`;
+
+            tbody.innerHTML = "";
+            if (rawScrapedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
+                return;
+            }
+
+            rawScrapedData.forEach((pt, index) => {
+                let pointNumber = prefix + (startNum + index);
+                
+                let northing = convertValue(pt.yMm, currentUnit);
+                let easting = convertValue(pt.xMm, currentUnit);
+                let elevation = convertValue(pt.zMm, currentUnit);
+
+                let col1Value = (formatOrder === "NEZ") ? northing : easting;
+                let col2Value = (formatOrder === "NEZ") ? easting : northing;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${pointNumber}</b></td>
+                        <td>${col1Value}</td>
+                        <td>${col2Value}</td>
+                        <td>${elevation}</td>
+                        <td>${description}</td>
+                    </tr>`;
+            });
+        }
+
+        function handleConfigChange() {
+            updateTableUI();
+        }
+
+        function handleExportClick() {
+            if (rawScrapedData.length === 0) {
+                alert("Nothing to export! Place measurements on screen and click Scrape first.");
+                return;
+            }
+            
+            try {
+                const currentUnit = document.getElementById("unitSelect").value;
+                const formatOrder = document.getElementById("orderSelect").value;
+                const prefix = document.getElementById("ptPrefix").value;
+                let startNum = parseInt(document.getElementById("ptStart").value);
+                if (isNaN(startNum)) startNum = 1;
+                const description = document.getElementById("ptDesc").value;
+
+                let csvContent = "";
+                if (formatOrder === "NEZ") {
+                    csvContent = `Point Number,Northing (${currentUnit}),Easting (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+                } else {
+                    csvContent = `Point Number,Easting (${currentUnit}),Northing (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+                }
+                
+                rawScrapedData.forEach((pt, index) => {
+                    let pointNumber = prefix + (startNum + index);
+                    let northing = convertValue(pt.yMm, currentUnit);
+                    let easting = convertValue(pt.xMm, currentUnit);
+                    let elevation = convertValue(pt.zMm, currentUnit);
+                    
+                    let val1 = (formatOrder === "NEZ") ? northing : easting;
+                    let val2 = (formatOrder === "NEZ") ? easting : northing;
+
+                    csvContent += `"${pointNumber}",${val1},${val2},${elevation},"${description}"\n`;
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `scraped_${formatOrder.toLowerCase()}_${currentUnit}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                alert("CSV generator execution crash: " + err.message);
+            }
+        }
+
+        // Initialize connection asynchronously
+        initExtension();
+    </script>
+</body>
+</html>
