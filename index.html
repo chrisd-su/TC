@@ -2,117 +2,129 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trimble Markup Extractor</title>
-    <script src="https://stg.connect.trimble.com/tc-workspace-api/bundle.js"></script>
-    
+    <title>CSV Point Logger</title>
+    <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 15px; background-color: #f4f7f6; color: #333; }
-        h3 { border-bottom: 2px solid #005a9c; padding-bottom: 5px; color: #005a9c; }
-        .controls { margin-bottom: 15px; }
-        button { background-color: #005a9c; color: white; border: none; padding: 8px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; }
-        button:hover { background-color: #004475; }
-        #status { font-size: 0.85rem; margin-top: 5px; font-style: italic; }
-        
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; background: white; font-size: 0.9rem; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #eee; }
-        .coord-label { font-weight: bold; color: #666; margin-right: 4px; }
-        .type-badge { padding: 2px 6px; border-radius: 10px; font-size: 0.75rem; text-transform: uppercase; font-weight: bold; }
-        .badge-line { background: #e3f2fd; color: #1976d2; }
-        .badge-meas { background: #f1f8e9; color: #388e3c; }
+        body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
+        h3 { margin-top: 0; color: #007bc4; }
+        .actions { margin-bottom: 15px; display: flex; gap: 10px; }
+        button { background: #007bc4; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
+        button:hover { background: #005a92; }
+        button.secondary { background: #666; }
+        button.secondary:hover { background: #444; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
+        th { background-color: #f4f4f4; }
     </style>
 </head>
 <body>
 
-    <h3>Markup Explorer</h3>
+    <h3>Point Logger Extension</h3>
+    <p style="font-size: 13px; color: #666;">Select an object/vertex in the 3D Viewer, then click log.</p>
     
-    <div class="controls">
-        <button onclick="refreshMarkups()">Scan Viewport</button>
-        <div id="status">Waiting for connection...</div>
+    <div class="actions">
+        <button id="logBtn">Log Selected Point</button>
+        <button id="exportBtn" class="secondary">Export CSV</button>
     </div>
 
-    <table id="markupTable">
+    <table>
         <thead>
             <tr>
-                <th>Type</th>
-                <th>Details / Coordinates (mm)</th>
+                <th>Label</th>
+                <th>X (m)</th>
+                <th>Y (m)</th>
+                <th>Z (m)</th>
             </tr>
         </thead>
-        <tbody id="markupBody">
-            </tbody>
+        <tbody id="pointTableBody">
+            <tr><td colspan="4" style="text-align:center; color:#999;">No points logged yet.</td></tr>
+        </tbody>
     </table>
 
     <script>
-        let viewerApi = null;
+        let loggedPoints = [];
+        let apiInstance = null;
 
-        // Initialize connection to Trimble Connect
-        async function init() {
+        // Initialize handshake with the Trimble Connect 3D Viewer
+        async function initExtension() {
             try {
-                const workspace = await window.TCHardware.connect();
-                const project = await workspace.getCurrentProject();
-                viewerApi = await project.getViewer();
-                
-                document.getElementById('status').innerText = "Connected to Viewer";
-                document.getElementById('status').style.color = "green";
-            } catch (err) {
-                document.getElementById('status').innerText = "Error: " + err.message;
-                document.getElementById('status').style.color = "red";
+                apiInstance = await TrimbleConnectWorkspaceAPI.connect(window.parent, (event, args) => {
+                    // Triggers on native frame events if needed
+                });
+                console.log("Trimble Connect extension initialized successfully.");
+            } catch (error) {
+                console.error("Failed to connect to Trimble Workspace API:", error);
             }
         }
 
-        async function refreshMarkups() {
-            if (!viewerApi) return;
-            
-            const status = document.getElementById('status');
-            const tbody = document.getElementById('markupBody');
-            
-            status.innerText = "Scanning...";
-            tbody.innerHTML = ""; // Clear existing rows
+        // Logic to grab coordinates of whatever the user has highlighted
+        document.getElementById("logBtn").addEventListener("click", async () => {
+            if (!apiInstance) return alert("Extension not connected to viewer.");
 
             try {
-                const markups = await viewerApi.getMarkups();
+                // 1. Get the current active user selection in the 3D window
+                const selection = await apiInstance.viewer.getSelection();
                 
-                if (markups.length === 0) {
-                    status.innerText = "No markups found in active view.";
+                if (!selection || !selection.objectRuntimeIds || selection.objectRuntimeIds.length === 0) {
+                    alert("Please select an object or vertex in the 3D Viewer first!");
                     return;
                 }
 
-                markups.forEach(m => {
-                    const row = document.createElement('tr');
+                // 2. Query the viewer for the properties (including position vectors) of that object
+                const objects = await apiInstance.viewer.getObjectProperties(selection.modelId, selection.objectRuntimeIds);
+                
+                if (objects && objects.length > 0 && objects[0].position) {
+                    const pos = objects[0].position;
                     
-                    // Format Type Badge
-                    const badgeClass = m.type === 'line' ? 'badge-line' : 'badge-meas';
-                    const typeTd = `<td><span class="type-badge ${badgeClass}">${m.type}</span></td>`;
+                    // 3. Ask the user for a custom name/label
+                    const label = prompt("Enter a label for this point:", `Point ${loggedPoints.length + 1}`) || "Unnamed Point";
                     
-                    // Format Geometry Data
-                    let detailHtml = "";
-                    if (m.type === 'line') {
-                        const { start, end } = m.geometry;
-                        detailHtml = `
-                            <div><span class="coord-label">Start:</span> ${start.x.toFixed(1)}, ${start.y.toFixed(1)}, ${start.z.toFixed(1)}</div>
-                            <div><span class="coord-label">End:</span> ${end.x.toFixed(1)}, ${end.y.toFixed(1)}, ${end.z.toFixed(1)}</div>
-                        `;
-                    } else {
-                        const pos = m.position || {x:0, y:0, z:0};
-                        detailHtml = `
-                            <div><span class="coord-label">Value:</span> ${m.value || 'N/A'}</div>
-                            <div><span class="coord-label">Pos:</span> ${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}</div>
-                        `;
-                    }
-
-                    row.innerHTML = `${typeTd}<td>${detailHtml}</td>`;
-                    tbody.appendChild(row);
-                });
-
-                status.innerText = `Found ${markups.length} markups.`;
+                    // 4. Save the coordinates (Trimble provides these in meters)
+                    loggedPoints.push({
+                        label: label,
+                        x: pos.x.toFixed(3),
+                        y: pos.y.toFixed(3),
+                        z: pos.z.toFixed(3)
+                    });
+                    
+                    updateTable();
+                } else {
+                    alert("Could not extract a geometric position for this object.");
+                }
             } catch (err) {
-                status.innerText = "Fetch failed: " + err.message;
+                console.error(err);
+                alert("Error capturing point coordinates.");
             }
+        });
+
+        // Update the HTML table UI
+        function updateTable() {
+            const tbody = document.getElementById("pointTableBody");
+            tbody.innerHTML = "";
+            loggedPoints.forEach(pt => {
+                tbody.innerHTML += `<tr><td><b>${pt.label}</b></td><td>${pt.x}</td><td>${pt.y}</td><td>${pt.z}</td></tr>`;
+            });
         }
 
-        // Start initialization
-        init();
+        // Standard client-side CSV compiler and download trigger
+        document.getElementById("exportBtn").addEventListener("click", () => {
+            if (loggedPoints.length === 0) return alert("Nothing to export yet!");
+            
+            let csvContent = "data:text/csv;charset=utf-8,Label,X (meters),Y (meters),Z (meters)\n";
+            loggedPoints.forEach(pt => {
+                csvContent += `"${pt.label}",${pt.x},${pt.y},${pt.z}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "trimble_connect_measurements.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        });
+
+        initExtension();
     </script>
 </body>
 </html>
