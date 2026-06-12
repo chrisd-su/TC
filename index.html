@@ -6,7 +6,8 @@
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
-        h3 { margin-top: 0; color: #007bc4; }
+        h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #666; }
         .actions { margin-bottom: 15px; display: flex; gap: 10px; }
         button { background: #007bc4; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #005a92; }
@@ -20,7 +21,7 @@
 <body>
 
     <h3>Point Logger Extension</h3>
-    <p style="font-size: 13px; color: #666;">Select an object/vertex in the 3D Viewer, then click log.</p>
+    <div id="statusBanner">Status: Waiting for initialization...</div>
     
     <div class="actions">
         <button id="logBtn">Log Selected Point</button>
@@ -44,42 +45,64 @@
     <script>
         let loggedPoints = [];
         let apiInstance = null;
+        const statusDiv = document.getElementById("statusBanner");
 
-        // Initialize handshake with the Trimble Connect 3D Viewer
+        // Dynamic handshake launcher
         async function initExtension() {
+            statusDiv.innerText = "Status: Connecting to Trimble Connect...";
+            statusDiv.style.background = "#fff3cd";
+            statusDiv.style.color = "#856404";
+
             try {
-                apiInstance = await TrimbleConnectWorkspaceAPI.connect(window.parent, (event, args) => {
-                    // Triggers on native frame events if needed
-                });
-                console.log("Trimble Connect extension initialized successfully.");
+                // Resolves naming variance across different CDN builds robustly
+                const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
+                
+                if (!TrimbleSDK) {
+                    throw new Error("Trimble SDK library script failed to load from CDN.");
+                }
+
+                // Establish postMessage communication channel with Trimble Connect
+                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {
+                    console.log("Trimble Event:", event, args);
+                }, 30000); // 30-second handshake timeout limit
+
+                statusDiv.innerText = "Status: Connected to Trimble Connect Successfully!";
+                statusDiv.style.background = "#d4edda";
+                statusDiv.style.color = "#155724";
             } catch (error) {
-                console.error("Failed to connect to Trimble Workspace API:", error);
+                console.error("Handshake Error:", error);
+                statusDiv.innerText = "Connection Failed: " + error.message;
+                statusDiv.style.background = "#f8d7da";
+                statusDiv.style.color = "#721c24";
             }
         }
 
-        // Logic to grab coordinates of whatever the user has highlighted
         document.getElementById("logBtn").addEventListener("click", async () => {
-            if (!apiInstance) return alert("Extension not connected to viewer.");
+            if (!apiInstance) {
+                alert("Extension is not connected to the viewer application yet.");
+                return;
+            }
+
+            // Ensure the extension has access to the 3D Viewer module
+            if (!apiInstance.viewer) {
+                alert("Connected to Trimble Connect, but cannot find the 3D Viewer canvas. Ensure you are executing this inside a project tab where a 3D model is currently open.");
+                return;
+            }
 
             try {
-                // 1. Get the current active user selection in the 3D window
                 const selection = await apiInstance.viewer.getSelection();
                 
                 if (!selection || !selection.objectRuntimeIds || selection.objectRuntimeIds.length === 0) {
-                    alert("Please select an object or vertex in the 3D Viewer first!");
+                    alert("Please select an object or vertex point on the 3D model first.");
                     return;
                 }
 
-                // 2. Query the viewer for the properties (including position vectors) of that object
                 const objects = await apiInstance.viewer.getObjectProperties(selection.modelId, selection.objectRuntimeIds);
                 
                 if (objects && objects.length > 0 && objects[0].position) {
                     const pos = objects[0].position;
+                    const label = prompt("Enter point label:", `Point ${loggedPoints.length + 1}`) || "Unnamed Point";
                     
-                    // 3. Ask the user for a custom name/label
-                    const label = prompt("Enter a label for this point:", `Point ${loggedPoints.length + 1}`) || "Unnamed Point";
-                    
-                    // 4. Save the coordinates (Trimble provides these in meters)
                     loggedPoints.push({
                         label: label,
                         x: pos.x.toFixed(3),
@@ -89,26 +112,28 @@
                     
                     updateTable();
                 } else {
-                    alert("Could not extract a geometric position for this object.");
+                    alert("Unable to fetch explicit coordinates for this selection block.");
                 }
             } catch (err) {
                 console.error(err);
-                alert("Error capturing point coordinates.");
+                alert("Error attempting to map coordinate vectors.");
             }
         });
 
-        // Update the HTML table UI
         function updateTable() {
             const tbody = document.getElementById("pointTableBody");
             tbody.innerHTML = "";
+            if(loggedPoints.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No points logged yet.</td></tr>`;
+                return;
+            }
             loggedPoints.forEach(pt => {
                 tbody.innerHTML += `<tr><td><b>${pt.label}</b></td><td>${pt.x}</td><td>${pt.y}</td><td>${pt.z}</td></tr>`;
             });
         }
 
-        // Standard client-side CSV compiler and download trigger
         document.getElementById("exportBtn").addEventListener("click", () => {
-            if (loggedPoints.length === 0) return alert("Nothing to export yet!");
+            if (loggedPoints.length === 0) return alert("No logged coordinate data found to export.");
             
             let csvContent = "data:text/csv;charset=utf-8,Label,X (meters),Y (meters),Z (meters)\n";
             loggedPoints.forEach(pt => {
@@ -124,6 +149,7 @@
             document.body.removeChild(link);
         });
 
+        // Initialize connection
         initExtension();
     </script>
 </body>
