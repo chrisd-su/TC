@@ -2,28 +2,40 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Diagnostic Build</title>
+    <title>CSV Point Scraper - Auto Units</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
         #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #666; }
+        .config-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; background: #f0f4f8; padding: 10px; border-radius: 4px; }
+        label { font-size: 13px; font-weight: bold; color: #34495e; }
+        select { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; width: 140px; }
         .actions { margin-bottom: 15px; display: flex; gap: 10px; }
         button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #01579b; }
         button.success { background: #2e7d32; }
         button.success:hover { background: #1b5e20; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 13px; }
         th { background-color: #f4f4f4; }
-        .debug-data { font-family: monospace; font-size: 10px; color: #555; background: #f9f9f9; max-width: 300px; overflow-x: auto; display: block; white-space: nowrap; }
     </style>
 </head>
 <body>
 
-    <h3>Screen Measurement Scraper (Diagnostic Build)</h3>
+    <h3>Screen Measurement Scraper</h3>
     <div id="statusBanner">Status: Connected to Viewer! Ready to scrape.</div>
     
+    <div class="config-row">
+        <label for="unitSelect">Target Output Unit:</label>
+        <select id="unitSelect">
+            <option value="mm">Millimeters (mm)</option>
+            <option value="m">Meters (m)</option>
+            <option value="in">Inches (in)</option>
+            <option value="ft">Decimal Feet (ft)</option>
+        </select>
+    </div>
+
     <div class="actions">
         <button id="scrapeBtn">Scrape Screen Measurements</button>
         <button id="exportBtn" class="success">Export CSV</button>
@@ -32,22 +44,22 @@
     <table>
         <thead>
             <tr>
-                <th>Point ID / Name</th>
-                <th>X (mm)</th>
-                <th>Y (mm)</th>
-                <th>Z (mm)</th>
-                <th>Raw API Structure (Diagnostic)</th>
+                <th>Measurement ID / Name</th>
+                <th id="thX">X (mm)</th>
+                <th id="thY">Y (mm)</th>
+                <th id="thZ">Z (mm)</th>
             </tr>
         </thead>
         <tbody id="pointTableBody">
-            <tr><td colspan="5" style="text-align:center; color:#999;">No data scraped yet. Place measurements and click Scrape.</td></tr>
+            <tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet. Place measurements on screen and click Scrape.</td></tr>
         </tbody>
     </table>
 
     <script>
-        let scrapedPoints = [];
+        let rawScrapedData = []; // Keeps raw accurate mm values from API
         let apiInstance = null;
         const statusDiv = document.getElementById("statusBanner");
+        const unitDropdown = document.getElementById("unitSelect");
 
         async function initExtension() {
             try {
@@ -64,38 +76,19 @@
             }
         }
 
-        // Deep property investigator to pull coordinates wherever they are hidden
-        function resolveCoordinates(pt) {
-            // Option A: Direct properties (positionX, positionY, positionZ)
+        // Helper function to handle fallback checking on coordinate arrays
+        function resolveRawMM(pt) {
             if (pt.positionX !== undefined && pt.positionX !== null) return { x: pt.positionX, y: pt.positionY, z: pt.positionZ };
-            
-            // Option B: Nested position block (pt.position.x)
             if (pt.position && pt.position.x !== undefined) return { x: pt.position.x, y: pt.position.y, z: pt.position.z };
-            if (pt.position && pt.position.positionX !== undefined) return { x: pt.position.positionX, y: pt.position.positionY, z: pt.position.positionZ };
-
-            // Option C: Nested pick block (pt.pick.positionX) - common for single point picks
             if (pt.pick && pt.pick.positionX !== undefined) return { x: pt.pick.positionX, y: pt.pick.positionY, z: pt.pick.positionZ };
-            if (pt.pick && pt.pick.x !== undefined) return { x: pt.pick.x, y: pt.pick.y, z: pt.pick.z };
-
-            // Option D: Nested point/start blocks
-            if (pt.point && pt.point.x !== undefined) return { x: pt.point.x, y: pt.point.y, z: pt.point.z };
-            if (pt.point && pt.point.positionX !== undefined) return { x: pt.point.positionX, y: pt.point.positionY, z: pt.point.positionZ };
-            if (pt.start && pt.start.positionX !== undefined) return { x: pt.start.positionX, y: pt.start.positionY, z: pt.start.positionZ };
-
-            // Option E: Direct standard vector fallback (x, y, z)
             if (pt.x !== undefined && pt.x !== null) return { x: pt.x, y: pt.y, z: pt.z };
-
-            // Option F: Fallback automated dictionary deep lookup
-            for (let key in pt) {
-                if (pt[key] && typeof pt[key] === 'object') {
-                    let sub = pt[key];
-                    if (sub.positionX !== undefined) return { x: sub.positionX, y: sub.positionY, z: sub.positionZ };
-                    if (sub.x !== undefined) return { x: sub.x, y: sub.y, z: sub.z };
-                }
-            }
-
-            return { x: null, y: null, z: null };
+            return { x: 0, y: 0, z: 0 };
         }
+
+        // Listens to dropdown changes to immediately redraw the table values
+        unitDropdown.addEventListener("change", () => {
+            updateTableUI();
+        });
 
         document.getElementById("scrapeBtn").addEventListener("click", async () => {
             if (!apiInstance || !apiInstance.markup) {
@@ -104,101 +97,106 @@
             }
 
             try {
-                scrapedPoints = []; 
-                
+                rawScrapedData = []; 
                 const singlePoints = await apiInstance.markup.getSinglePointMarkups();
                 const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
 
-                // Process Single Points with the deep coordinate resolver
                 if (singlePoints && singlePoints.length > 0) {
                     singlePoints.forEach((pt, index) => {
-                        let coords = resolveCoordinates(pt);
-                        let rawString = JSON.stringify(pt); // Capture exact JSON structure
-
-                        scrapedPoints.push({
+                        let mmCoords = resolveRawMM(pt);
+                        rawScrapedData.push({
                             name: `Coordinate Point ${pt.id || index + 1}`,
-                            x: coords.x !== null ? parseFloat(coords.x).toFixed(1) : "Not Found",
-                            y: coords.y !== null ? parseFloat(coords.y).toFixed(1) : "Not Found",
-                            z: coords.z !== null ? parseFloat(coords.z).toFixed(1) : "Not Found",
-                            raw: rawString
+                            xMm: mmCoords.x,
+                            yMm: mmCoords.y,
+                            zMm: mmCoords.z
                         });
                     });
                 }
 
-                // Process Linear Dimensions
                 if (linearMeasurements && linearMeasurements.length > 0) {
                     linearMeasurements.forEach((meas, index) => {
-                        let rawString = JSON.stringify(meas);
                         if (meas.start) {
-                            let startCoords = resolveCoordinates(meas.start);
-                            scrapedPoints.push({
-                                name: `Dim ${meas.id || index + 1} (Start)`,
-                                x: startCoords.x !== null ? parseFloat(startCoords.x).toFixed(1) : "Not Found",
-                                y: startCoords.y !== null ? parseFloat(startCoords.y).toFixed(1) : "Not Found",
-                                z: startCoords.z !== null ? parseFloat(startCoords.z).toFixed(1) : "Not Found",
-                                raw: rawString
-                            });
+                            let startCoords = resolveRawMM(meas.start);
+                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (Start)`, xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
                         }
                         if (meas.end) {
-                            let endCoords = resolveCoordinates(meas.end);
-                            scrapedPoints.push({
-                                name: `Dim ${meas.id || index + 1} (End)`,
-                                x: endCoords.x !== null ? parseFloat(endCoords.x).toFixed(1) : "Not Found",
-                                y: endCoords.y !== null ? parseFloat(endCoords.y).toFixed(1) : "Not Found",
-                                z: endCoords.z !== null ? parseFloat(endCoords.z).toFixed(1) : "Not Found",
-                                raw: rawString
-                            });
+                            let endCoords = resolveRawMM(meas.end);
+                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (End)`, xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
                         }
                     });
                 }
 
                 updateTableUI();
 
-                if (scrapedPoints.length === 0) {
-                    alert("No active point or line measurements found on screen.");
+                if (rawScrapedData.length === 0) {
+                    alert("No active measurements found on screen.");
                 } else {
-                    statusDiv.innerText = `Status: Scraped ${scrapedPoints.length} entries. Check data outputs below.`;
+                    statusDiv.innerText = `Status: Scraped ${rawScrapedData.length} coordinate markers.`;
                 }
-
             } catch (err) {
                 console.error(err);
-                alert("Scraper error. Check console logs.");
+                alert("Error during scene compilation query.");
             }
         });
 
+        // Handles unit mathematical conversions on the fly
+        function convertValue(valInMm, targetUnit) {
+            switch(targetUnit) {
+                case "m":  return (valInMm / 1000).toFixed(3);   // mm to meters
+                case "in": return (valInMm / 25.4).toFixed(2);   // mm to inches
+                case "ft": return (valInMm / 304.8).toFixed(3);  // mm to decimal feet
+                case "mm":
+                default:   return parseFloat(valInMm).toFixed(1); // remain mm
+            }
+        }
+
         function updateTableUI() {
             const tbody = document.getElementById("pointTableBody");
-            tbody.innerHTML = "";
+            const currentUnit = unitDropdown.value;
             
-            if (scrapedPoints.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
+            // Sync Table Header Text with your chosen unit selector
+            document.getElementById("thX").innerText = `X (${currentUnit})`;
+            document.getElementById("thY").innerText = `Y (${currentUnit})`;
+            document.getElementById("thZ").innerText = `Z (${currentUnit})`;
+
+            tbody.innerHTML = "";
+            if (rawScrapedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
                 return;
             }
 
-            scrapedPoints.forEach(pt => {
+            rawScrapedData.forEach(pt => {
+                let displayX = convertValue(pt.xMm, currentUnit);
+                let displayY = convertValue(pt.yMm, currentUnit);
+                let displayZ = convertValue(pt.zMm, currentUnit);
+
                 tbody.innerHTML += `
                     <tr>
                         <td><b>${pt.name}</b></td>
-                        <td style="color: ${pt.x === 'Not Found' ? 'red' : 'green'}">${pt.x}</td>
-                        <td style="color: ${pt.y === 'Not Found' ? 'red' : 'green'}">${pt.y}</td>
-                        <td style="color: ${pt.z === 'Not Found' ? 'red' : 'green'}">${pt.z}</td>
-                        <td><div class="debug-data">${pt.raw}</div></td>
+                        <td>${displayX}</td>
+                        <td>${displayY}</td>
+                        <td>${displayZ}</td>
                     </tr>`;
             });
         }
 
         document.getElementById("exportBtn").addEventListener("click", () => {
-            if (scrapedPoints.length === 0) return alert("No data to export.");
+            if (rawScrapedData.length === 0) return alert("No coordinate parameters stored to process.");
             
-            let csvContent = "data:text/csv;charset=utf-8,Point Name,X (mm),Y (mm),Z (mm)\n";
-            scrapedPoints.forEach(pt => {
-                csvContent += `"${pt.name}",${pt.x},${pt.y},${pt.z}\n`;
+            const currentUnit = unitDropdown.value;
+            let csvContent = `data:text/csv;charset=utf-8,Point Name,X (${currentUnit}),Y (${currentUnit}),Z (${currentUnit})\n`;
+            
+            rawScrapedData.forEach(pt => {
+                let csvX = convertValue(pt.xMm, currentUnit);
+                let csvY = convertValue(pt.yMm, currentUnit);
+                let csvZ = convertValue(pt.zMm, currentUnit);
+                csvContent += `"${pt.name}",${csvX},${csvY},${csvZ}\n`;
             });
 
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "diagnostic_measurements.csv");
+            link.setAttribute("download", `scraped_measurements_${currentUnit}.csv`);
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
