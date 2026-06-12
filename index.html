@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Fail Safe</title>
+    <title>CSV Point Scraper - US Survey Ft Build</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
@@ -10,7 +10,7 @@
         #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #666; }
         .config-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; background: #f0f4f8; padding: 10px; border-radius: 4px; }
         label { font-size: 13px; font-weight: bold; color: #34495e; }
-        select { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; width: 140px; }
+        select { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; width: 180px; }
         .actions { margin-bottom: 15px; display: flex; gap: 10px; }
         button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; }
         button:hover { background: #01579b; }
@@ -32,7 +32,8 @@
             <option value="mm">Millimeters (mm)</option>
             <option value="m">Meters (m)</option>
             <option value="in">Inches (in)</option>
-            <option value="ft">Decimal Feet (ft)</option>
+            <option value="ft">International Feet (ft)</option>
+            <option value="usft">US Survey Feet (USft)</option>
         </select>
     </div>
 
@@ -59,7 +60,6 @@
         let rawScrapedData = []; 
         let apiInstance = null;
 
-        // Initialize connection with Trimble Connect
         async function initExtension() {
             const statusDiv = document.getElementById("statusBanner");
             try {
@@ -78,7 +78,6 @@
             }
         }
 
-        // Broad scope coordinate property crawler
         function resolveRawMM(pt) {
             if (!pt) return { x: 0, y: 0, z: 0 };
             if (pt.positionX !== undefined && pt.positionX !== null) return { x: pt.positionX, y: pt.positionY, z: pt.positionZ };
@@ -91,7 +90,6 @@
             if (pt.start && pt.start.positionX !== undefined) return { x: pt.start.positionX, y: pt.start.positionY, z: pt.start.positionZ };
             if (pt.x !== undefined && pt.x !== null) return { x: pt.x, y: pt.y, z: pt.z };
 
-            // Backup recursive property sweep
             for (let key in pt) {
                 if (pt[key] && typeof pt[key] === 'object') {
                     let sub = pt[key];
@@ -102,14 +100,13 @@
             return { x: 0, y: 0, z: 0 };
         }
 
-        // Triggered instantly by the HTML onclick="handleScrapeClick()"
         async function handleScrapeClick() {
             if (!apiInstance) {
-                alert("Cannot scrape: The extension hasn't established a handshake connection with the Trimble Viewer yet.");
+                alert("Cannot scrape: Extension handshake with Trimble is not established.");
                 return;
             }
             if (!apiInstance.markup) {
-                alert("Cannot scrape: Connected to Trimble, but the Markup/Measurement engine is disabled or missing.");
+                alert("Cannot scrape: Connected to Trimble, but Markup engine is inaccessible.");
                 return;
             }
 
@@ -123,117 +120,4 @@
                         let mmCoords = resolveRawMM(pt);
                         rawScrapedData.push({
                             name: `Coordinate Point ${pt.id || index + 1}`,
-                            xMm: mmCoords.x,
-                            yMm: mmCoords.y,
-                            zMm: mmCoords.z
-                        });
-                    });
-                }
-
-                if (linearMeasurements && linearMeasurements.length > 0) {
-                    linearMeasurements.forEach((meas, index) => {
-                        if (meas.start) {
-                            let startCoords = resolveRawMM(meas.start);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (Start)`, xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
-                        }
-                        if (meas.end) {
-                            let endCoords = resolveRawMM(meas.end);
-                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (End)`, xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
-                        }
-                    });
-                }
-
-                updateTableUI();
-
-                if (rawScrapedData.length === 0) {
-                    alert("Scrape processed successfully, but 0 active measurement markers were discovered on your screen.");
-                } else {
-                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} coordinate markers successfully.`;
-                }
-            } catch (err) {
-                alert("Scraper system encountered an internal runtime error: " + err.message);
-            }
-        }
-
-        // Unit math engine
-        function convertValue(valInMm, targetUnit) {
-            let num = parseFloat(valInMm);
-            if (isNaN(num)) return "0.0";
-            
-            switch(targetUnit) {
-                case "m":  return (num / 1000).toFixed(3);   // mm to meters
-                case "in": return (num / 25.4).toFixed(2);   // mm to inches
-                case "ft": return (num / 304.8).toFixed(3);  // mm to decimal feet
-                case "mm":
-                default:   return num.toFixed(1);            // remain mm
-            }
-        }
-
-        function updateTableUI() {
-            const tbody = document.getElementById("pointTableBody");
-            const currentUnit = document.getElementById("unitSelect").value;
-            
-            document.getElementById("thX").innerText = `X (${currentUnit})`;
-            document.getElementById("thY").innerText = `Y (${currentUnit})`;
-            document.getElementById("thZ").innerText = `Z (${currentUnit})`;
-
-            tbody.innerHTML = "";
-            if (rawScrapedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
-                return;
-            }
-
-            rawScrapedData.forEach(pt => {
-                let displayX = convertValue(pt.xMm, currentUnit);
-                let displayY = convertValue(pt.yMm, currentUnit);
-                let displayZ = convertValue(pt.zMm, currentUnit);
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><b>${pt.name}</b></td>
-                        <td>${displayX}</td>
-                        <td>${displayY}</td>
-                        <td>${displayZ}</td>
-                    </tr>`;
-            });
-        }
-
-        function handleUnitChange() {
-            updateTableUI();
-        }
-
-        // Triggered instantly by HTML onclick="handleExportClick()"
-        function handleExportClick() {
-            if (rawScrapedData.length === 0) {
-                alert("Nothing to export! Please put measurements on screen and click Scrape first.");
-                return;
-            }
-            
-            try {
-                const currentUnit = document.getElementById("unitSelect").value;
-                let csvContent = `data:text/csv;charset=utf-8,Point Name,X (${currentUnit}),Y (${currentUnit}),Z (${currentUnit})\n`;
-                
-                rawScrapedData.forEach(pt => {
-                    let csvX = convertValue(pt.xMm, currentUnit);
-                    let csvY = convertValue(pt.yMm, currentUnit);
-                    let csvZ = convertValue(pt.zMm, currentUnit);
-                    csvContent += `"${pt.name}",${csvX},${csvY},${csvZ}\n`;
-                });
-
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `scraped_measurements_${currentUnit}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            } catch (err) {
-                alert("CSV generator crash: " + err.message);
-            }
-        }
-
-        // Trigger loading sequency
-        initExtension();
-    </script>
-</body>
-</html>
+                            xMm: mmCoords.x
