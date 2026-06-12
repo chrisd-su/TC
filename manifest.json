@@ -1,19 +1,6 @@
 {
-  "name": "Markup Extractor Tool",
-  "id": "com.yourcompany.markupextractor",
-  "version": "1.0.0",
-  "entryPoint": "index.html",
-  "icon": "icon.png",
-  "permissions": [
-    "project:read",
-    "viewer:read"
-  ],
-  "supportedPlatforms": ["web"],
-  "locations": [
-    {
-      "id": "viewer-side-panel",
-      "title": "Markup Data",
-      "toolbarIcon": "icon.png"
-    }
-  ]
+  "title": "CSV Point Logger",
+  "description": "Log coordinate points from the model and export to a CSV file.",
+  "url": "https://github.com/chrisd-su/TC/blob/main/index.html",
+  "enabled": true
 }
