@@ -2,12 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - US Survey Ft Build</title>
+    <title>CSV Point Scraper - Tracking Build</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
         h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
-        #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #666; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #9e9e9e; color: white; }
         .config-row { margin-bottom: 15px; display: flex; align-items: center; gap: 10px; background: #f0f4f8; padding: 10px; border-radius: 4px; }
         label { font-size: 13px; font-weight: bold; color: #34495e; }
         select { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; width: 180px; }
@@ -24,7 +24,7 @@
 <body>
 
     <h3>Screen Measurement Scraper</h3>
-    <div id="statusBanner">Status: Initializing extension code...</div>
+    <div id="statusBanner">HTML Loaded. Waiting for Script...</div>
     
     <div class="config-row">
         <label for="unitSelect">Target Output Unit:</label>
@@ -57,6 +57,14 @@
     </table>
 
     <script>
+        // Execution Verification: This runs immediately when the script block initializes
+        (function() {
+            const banner = document.getElementById("statusBanner");
+            banner.innerText = "Script Block Executing... Attempting Handshake.";
+            banner.style.background = "#0288d1";
+            banner.style.color = "white";
+        })();
+
         let rawScrapedData = []; 
         let apiInstance = null;
 
@@ -64,7 +72,7 @@
             const statusDiv = document.getElementById("statusBanner");
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("Trimble SDK library not found.");
+                if (!TrimbleSDK) throw new Error("Trimble SDK CDN library failed to load.");
                 
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
@@ -120,4 +128,115 @@
                         let mmCoords = resolveRawMM(pt);
                         rawScrapedData.push({
                             name: `Coordinate Point ${pt.id || index + 1}`,
-                            xMm: mmCoords.x
+                            xMm: mmCoords.x,
+                            yMm: mmCoords.y,
+                            zMm: mmCoords.z
+                        });
+                    });
+                }
+
+                if (linearMeasurements && linearMeasurements.length > 0) {
+                    linearMeasurements.forEach((meas, index) => {
+                        if (meas.start) {
+                            let startCoords = resolveRawMM(meas.start);
+                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (Start)`, xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z });
+                        }
+                        if (meas.end) {
+                            let endCoords = resolveRawMM(meas.end);
+                            rawScrapedData.push({ name: `Dim ${meas.id || index + 1} (End)`, xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z });
+                        }
+                    });
+                }
+
+                updateTableUI();
+
+                if (rawScrapedData.length === 0) {
+                    alert("Scrape processed, but 0 active measurement markers were discovered on screen.");
+                } else {
+                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} coordinate markers successfully.`;
+                }
+            } catch (err) {
+                alert("Scraper system error: " + err.message);
+            }
+        }
+
+        function convertValue(valInMm, targetUnit) {
+            let num = parseFloat(valInMm);
+            if (isNaN(num)) return "0.0";
+            
+            switch(targetUnit) {
+                case "m":    return (num / 1000).toFixed(3);        // mm to meters
+                case "in":   return (num / 25.4).toFixed(2);        // mm to inches
+                case "ft":   return (num / 304.8).toFixed(3);       // mm to International Feet
+                case "usft": return (num / 304.8006096).toFixed(3); // mm to US Survey Feet
+                case "mm":
+                default:     return num.toFixed(1);                 // remain mm
+            }
+        }
+
+        function updateTableUI() {
+            const tbody = document.getElementById("pointTableBody");
+            const currentUnit = document.getElementById("unitSelect").value;
+            
+            document.getElementById("thX").innerText = `X (${currentUnit})`;
+            document.getElementById("thY").innerText = `Y (${currentUnit})`;
+            document.getElementById("thZ").innerText = `Z (${currentUnit})`;
+
+            tbody.innerHTML = "";
+            if (rawScrapedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
+                return;
+            }
+
+            rawScrapedData.forEach(pt => {
+                let displayX = convertValue(pt.xMm, currentUnit);
+                let displayY = convertValue(pt.yMm, currentUnit);
+                let displayZ = convertValue(pt.zMm, currentUnit);
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td><b>${pt.name}</b></td>
+                        <td>${displayX}</td>
+                        <td>${displayY}</td>
+                        <td>${displayZ}</td>
+                    </tr>`;
+            });
+        }
+
+        function handleUnitChange() {
+            updateTableUI();
+        }
+
+        function handleExportClick() {
+            if (rawScrapedData.length === 0) {
+                alert("Nothing to export! Put measurements on screen and click Scrape first.");
+                return;
+            }
+            
+            try {
+                const currentUnit = document.getElementById("unitSelect").value;
+                let csvContent = `data:text/csv;charset=utf-8,Point Name,X (${currentUnit}),Y (${currentUnit}),Z (${currentUnit})\n`;
+                
+                rawScrapedData.forEach(pt => {
+                    let csvX = convertValue(pt.xMm, currentUnit);
+                    let csvY = convertValue(pt.yMm, currentUnit);
+                    let csvZ = convertValue(pt.zMm, currentUnit);
+                    csvContent += `"${pt.name}",${csvX},${csvY},${csvZ}\n`;
+                });
+
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `scraped_measurements_${currentUnit}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } catch (err) {
+                alert("CSV generator crash: " + err.message);
+            }
+        }
+
+        initExtension();
+    </script>
+</body>
+</html>
