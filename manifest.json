@@ -1,7 +1,7 @@
 {
   "title": "CSV Point Logger",
   "description": "Log coordinate points from the model and export to a CSV file.",
-  "icon": "https://github.com/chrisd-su/TC/blob/main/pointscrapper_icon.png"
+  "icon": "https://github.com/chrisd-su/TC/blob/main/pointscrapper_icon.png",
   "url": "https://github.com/chrisd-su/TC/blob/main/index.html",
   "enabled": true
 }
