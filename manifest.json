@@ -1,6 +1,6 @@
 {
   "title": "Point Scraper | CSV Export",
-  "description": "Log coordinate points from the model and export to a CSV file.",
+  "description": "Log the coordinates of the Trimbel Connect measurements on the model and export to a CSV file.",
   "icon": "https://chrisd-su.github.io/TC/pointscrapper_icon.png",
   "url": "https://chrisd-su.github.io/TC/scraper.html",
   "enabled": true
