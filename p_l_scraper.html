@@ -35,7 +35,7 @@
 </head>
 <body>
 
-    <h3>PNEZD Layout Scraper_2</h3>
+    <h3>PNEZD Scraper_3</h3>
     <div id="statusBanner">Status: Connecting to Trimble Connect API...</div>
     
     <div class="config-container">
@@ -105,8 +105,6 @@
         let apiInstance = null;
         const statusBanner = document.getElementById("statusBanner");
 
-        // DYNAMIC REGION RESOLVER: Extracts parent frame host context dynamically to match token signatures
-        // Supports NA, EU, UK, and Asia Pacific regional clusters automatically
         function getApiBaseUrl() {
             const ref = document.referrer || "";
             if (ref.includes("web21") || ref.includes("eu") || ref.includes("europe")) {
@@ -118,7 +116,7 @@
             } else if (ref.includes("web32")) {
                 return "https://app32.connect.trimble.com/tc/api/2.0";
             }
-            return "https://app.connect.trimble.com/tc/api/2.0"; // Default US Master Region
+            return "https://app.connect.trimble.com/tc/api/2.0";
         }
 
         async function initExtension() {
@@ -371,7 +369,7 @@
             URL.revokeObjectURL(blobUrl);
         }
 
-        // Region-Aware Multi-Format Cloud Storage Synchronization Engine
+        // REFACTORED MULTI-REGION DIRECT UPLOAD ENGINE: Handles file sync as a structured multipart/form POST
         async function uploadFileToProject(fileType) {
             if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
             
@@ -386,13 +384,12 @@
                     throw new Error("Could not capture project scope parameters from active layout window.");
                 }
 
-                // DYNAMIC BASE ROUTER ACTIVATION
                 const baseUrl = getApiBaseUrl();
                 statusBanner.innerText = "Status: Inspecting project directory paths...";
                 
                 let targetFolderId = project.id; 
 
-                // STAGE 1: Check directory folder presence on localized region cluster
+                // STAGE 1: Check if 'Point Scraper files' folder exists on the region cluster
                 try {
                     const listUrl = `${baseUrl}/folders/${project.id}/items`;
                     const listResponse = await fetch(listUrl, {
@@ -407,7 +404,7 @@
                         if (existingFolder) {
                             targetFolderId = existingFolder.id;
                         } else {
-                            // STAGE 2: Instantiation loop with explicit plain body formatting
+                            // STAGE 2: Instantiation loop for missing folders
                             statusBanner.innerText = "Status: Generating 'Point Scraper files' folder...";
                             const createFolderUrl = `${baseUrl}/folders?parentId=${project.id}`;
                             const createResponse = await fetch(createFolderUrl, {
@@ -426,10 +423,10 @@
                         }
                     }
                 } catch (folderErr) {
-                    console.warn("Folder manager failed, continuing with direct file save to project root context.", folderErr);
+                    console.warn("Folder manager fallback activated. Routing file directly to project root.", folderErr);
                 }
 
-                statusBanner.innerText = `Status: Transmitting ${fileType.toUpperCase()} file to target directory...`;
+                statusBanner.innerText = `Status: Transmitting ${fileType.toUpperCase()} file data stream...`;
                 
                 let fileBody = "";
                 let mimeType = "";
@@ -443,37 +440,25 @@
                 
                 const fileName = resolveCleanFileName(fileType);
 
-                // STAGE 3: Structural cloud record location placeholder initialization
-                const initUrl = `${baseUrl}/files?parentId=${targetFolderId}`;
-                const response = await fetch(initUrl, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ name: fileName })
-                });
-
-                if (!response.ok) {
-                    const errDetail = await response.text();
-                    throw new Error(`Trimble server refused cloud placeholder initialization: ${errDetail}`);
-                }
-
-                const fileMeta = await response.json();
-                
-                // STAGE 4: Transmission execution upload block
+                // FIXED STAGE 3: Pack data into a Multipart Form stream container for single-step delivery
                 const formData = new FormData();
                 const fileBlob = new Blob([fileBody], { type: mimeType });
                 formData.append("file", fileBlob, fileName);
 
-                const uploadUrl = `${baseUrl}/files/${fileMeta.id}/upload`;
+                const uploadUrl = `${baseUrl}/files?parentId=${targetFolderId}`;
                 const uploadRes = await fetch(uploadUrl, {
-                    method: "PUT",
-                    headers: { "Authorization": `Bearer ${token}` },
+                    method: "POST",
+                    headers: { 
+                        "Authorization": `Bearer ${token}`
+                        // Note: Leave Content-Type header blank here so the browser can calculate the boundary signature dynamically.
+                    },
                     body: formData
                 });
 
-                if (!uploadRes.ok) throw new Error("Binary chunk execution transmission drop.");
+                if (!uploadRes.ok) {
+                    const errDetail = await uploadRes.text();
+                    throw new Error(`Trimble server rejected content parameters: ${errDetail}`);
+                }
 
                 statusBanner.innerText = `Status: Saved ${fileType.toUpperCase()} successfully to Project folder!`;
                 statusBanner.style.background = "#2e7d32";
