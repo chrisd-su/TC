@@ -105,6 +105,22 @@
         let apiInstance = null;
         const statusBanner = document.getElementById("statusBanner");
 
+        // DYNAMIC REGION RESOLVER: Extracts parent frame host context dynamically to match token signatures
+        // Supports NA, EU, UK, and Asia Pacific regional clusters automatically
+        function getApiBaseUrl() {
+            const ref = document.referrer || "";
+            if (ref.includes("web21") || ref.includes("eu") || ref.includes("europe")) {
+                return "https://app21.connect.trimble.com/tc/api/2.0";
+            } else if (ref.includes("web22") || ref.includes("uk")) {
+                return "https://app22.connect.trimble.com/tc/api/2.0";
+            } else if (ref.includes("web31") || ref.includes("ap") || ref.includes("asia")) {
+                return "https://app31.connect.trimble.com/tc/api/2.0";
+            } else if (ref.includes("web32")) {
+                return "https://app32.connect.trimble.com/tc/api/2.0";
+            }
+            return "https://app.connect.trimble.com/tc/api/2.0"; // Default US Master Region
+        }
+
         async function initExtension() {
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
@@ -269,7 +285,6 @@
             return dxf.join("\n");
         }
 
-        // Handles cleaning names for browser safety constraints
         function resolveCleanFileName(extensionType) {
             let userField = document.getElementById("fileNameInput").value.trim();
             if (!userField) userField = "scraped_layout";
@@ -356,7 +371,7 @@
             URL.revokeObjectURL(blobUrl);
         }
 
-        // Unified Multi-Format Cloud Processing Engine with Automated Folder Routing
+        // Region-Aware Multi-Format Cloud Storage Synchronization Engine
         async function uploadFileToProject(fileType) {
             if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
             
@@ -371,13 +386,15 @@
                     throw new Error("Could not capture project scope parameters from active layout window.");
                 }
 
+                // DYNAMIC BASE ROUTER ACTIVATION
+                const baseUrl = getApiBaseUrl();
                 statusBanner.innerText = "Status: Inspecting project directory paths...";
                 
-                let targetFolderId = project.id; // Fallback defaults directly to project root folder
+                let targetFolderId = project.id; 
 
-                // STAGE 1: Scan current layout contents to evaluate directory structures
+                // STAGE 1: Check directory folder presence on localized region cluster
                 try {
-                    const listUrl = `https://app.connect.trimble.com/tc/api/2.0/folders/${project.id}/items`;
+                    const listUrl = `${baseUrl}/folders/${project.id}/items`;
                     const listResponse = await fetch(listUrl, {
                         method: "GET",
                         headers: { "Authorization": `Bearer ${token}` }
@@ -390,9 +407,9 @@
                         if (existingFolder) {
                             targetFolderId = existingFolder.id;
                         } else {
-                            // STAGE 2: Folder instantiation fallback if directory checks turn up empty
+                            // STAGE 2: Instantiation loop with explicit plain body formatting
                             statusBanner.innerText = "Status: Generating 'Point Scraper files' folder...";
-                            const createFolderUrl = `https://app.connect.trimble.com/tc/api/2.0/folders?parentId=${project.id}`;
+                            const createFolderUrl = `${baseUrl}/folders?parentId=${project.id}`;
                             const createResponse = await fetch(createFolderUrl, {
                                 method: "POST",
                                 headers: {
@@ -405,26 +422,11 @@
                             if (createResponse.ok) {
                                 const newFolder = await createResponse.json();
                                 targetFolderId = newFolder.id;
-                            } else {
-                                // Secondary core asset creation routing check
-                                const altCreateUrl = `https://app.connect.trimble.com/tc/api/2.0/files?parentId=${project.id}`;
-                                const altResponse = await fetch(altCreateUrl, {
-                                    method: "POST",
-                                    headers: {
-                                        "Authorization": `Bearer ${token}`,
-                                        "Content-Type": "application/json"
-                                    },
-                                    body: JSON.stringify({ name: "Point Scraper files", type: "folder" })
-                                });
-                                if (altResponse.ok) {
-                                    const altFolder = await altResponse.json();
-                                    targetFolderId = altFolder.id;
-                                }
                             }
                         }
                     }
                 } catch (folderErr) {
-                    console.warn("Folder organization module warning. Reverting upload to root project folder context:", folderErr);
+                    console.warn("Folder manager failed, continuing with direct file save to project root context.", folderErr);
                 }
 
                 statusBanner.innerText = `Status: Transmitting ${fileType.toUpperCase()} file to target directory...`;
@@ -441,15 +443,15 @@
                 
                 const fileName = resolveCleanFileName(fileType);
 
-                // STAGE 3: File placeholder initialization within our target folder ID
-                const initUrl = `https://app.connect.trimble.com/tc/api/2.0/files?parentId=${targetFolderId}`;
+                // STAGE 3: Structural cloud record location placeholder initialization
+                const initUrl = `${baseUrl}/files?parentId=${targetFolderId}`;
                 const response = await fetch(initUrl, {
                     method: "POST",
                     headers: {
                         "Authorization": `Bearer ${token}`,
                         "Content-Type": "application/json"
                     },
-                    body: JSON.stringify({ name: fileName, type: "file" })
+                    body: JSON.stringify({ name: fileName })
                 });
 
                 if (!response.ok) {
@@ -459,12 +461,12 @@
 
                 const fileMeta = await response.json();
                 
-                // STAGE 4: Direct binary stream transmission execution
+                // STAGE 4: Transmission execution upload block
                 const formData = new FormData();
                 const fileBlob = new Blob([fileBody], { type: mimeType });
                 formData.append("file", fileBlob, fileName);
 
-                const uploadUrl = `https://app.connect.trimble.com/tc/api/2.0/files/${fileMeta.id}/upload`;
+                const uploadUrl = `${baseUrl}/files/${fileMeta.id}/upload`;
                 const uploadRes = await fetch(uploadUrl, {
                     method: "PUT",
                     headers: { "Authorization": `Bearer ${token}` },
@@ -475,13 +477,15 @@
 
                 statusBanner.innerText = `Status: Saved ${fileType.toUpperCase()} successfully to Project folder!`;
                 statusBanner.style.background = "#2e7d32";
-                alert(`File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 Point Scraper files / 📄 ${fileName}`);
+                
+                let displayPath = targetFolderId === project.id ? "Project Root" : "Point Scraper files";
+                alert(`File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 ${displayPath} / 📄 ${fileName}`);
 
             } catch (err) {
                 statusBanner.innerText = "Cloud Sync Error: Check Console logs.";
                 statusBanner.style.background = "#f8d7da";
                 statusBanner.style.color = "#721c24";
-                alert("Cloud connection intercepted: " + err.message);
+                alert("Cloud connection intercepted: " + err.message + "\n\nNote: Fallback to local downloading remains accessible below.");
                 console.error(err);
             }
         }
