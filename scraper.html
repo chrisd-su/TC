@@ -2,35 +2,47 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>CSV Point Scraper - Standard Build</title>
+    <title>PNEZD Survey, DXF & Cloud Scraper</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; padding: 15px; background: #fdfdfd; color: #333; }
-        h3 { margin-top: 0; color: #007bc4; margin-bottom: 5px; }
-        #statusBanner { font-size: 12px; font-weight: bold; padding: 6px; border-radius: 4px; margin-bottom: 15px; background: #eee; color: #333; }
+        body { font-family: Arial, sans-serif; padding: 12px; background: #fdfdfd; color: #333; margin: 0; }
+        h3 { margin-top: 0; color: #007bc4; font-size: 16px; margin-bottom: 8px; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #0288d1; color: white; }
         
-        .config-container { background: #f0f4f8; padding: 12px; border-radius: 4px; margin-bottom: 15px; display: flex; flex-direction: column; gap: 10px; }
+        /* Optimized Responsive Config Panel Layout */
+        .config-container { background: #f0f4f8; padding: 10px; border-radius: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
         .config-group { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-        .config-group label { font-size: 11px; font-weight: bold; color: #34495e; margin-bottom: 0; }
-        .config-group select, .config-group input { padding: 6px; font-size: 13px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; width: 60%; }
+        .config-group label { font-size: 11px; font-weight: bold; color: #34495e; }
+        .config-group select, .config-group input { padding: 5px; font-size: 12px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; width: 55%; }
         
-        .actions { margin-bottom: 15px; display: flex; gap: 10px; }
-        button { background: #0288d1; color: white; border: none; padding: 10px 14px; cursor: pointer; border-radius: 4px; font-weight: bold; flex: 1; }
+        .actions { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+        button { background: #0288d1; color: white; border: none; padding: 8px 6px; cursor: pointer; border-radius: 4px; font-weight: bold; flex: 1; font-size: 11px; min-width: 100px; }
         button:hover { background: #01579b; }
-        button.success { background: #2e7d32; color: white; }
+        button.success { background: #2e7d32; }
         button.success:hover { background: #1b5e20; }
+        button.cad { background: #e65100; }
+        button.cad:hover { background: #b53f00; }
+        button.cloud { background: #007bc4; }
+        button.cloud:hover { background: #005a91; }
+        button.cloud-dxf { background: #bf360c; }
+        button.cloud-dxf:hover { background: #870000; }
         
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 12px; }
+        .table-wrapper { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 5px; }
+        th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 11px; }
         th { background-color: #f4f4f4; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h3>Comprehensive Coordinate Layout Scraper</h3>
-    <div id="statusBanner">Status: Initializing script engine...</div>
+    <h3>PNEZD Layout Scraper</h3>
+    <div id="statusBanner">Status: Connecting to Trimble Connect API...</div>
     
     <div class="config-container">
+        <div class="config-group">
+            <label for="fileNameInput">Output File Name</label>
+            <input type="text" id="fileNameInput" value="scraped_layout">
+        </div>
         <div class="config-group">
             <label for="unitSelect">Target Unit</label>
             <select id="unitSelect" onchange="handleConfigChange()">
@@ -49,64 +61,64 @@
             </select>
         </div>
         <div class="config-group">
-            <label for="ptPrefix">Point Prefix (P)</label>
+            <label for="ptPrefix">Point Prefix</label>
             <input type="text" id="ptPrefix" value="P-" oninput="handleConfigChange()">
         </div>
         <div class="config-group">
-            <label for="ptStart">Start ID # (P)</label>
+            <label for="ptStart">Start ID #</label>
             <input type="number" id="ptStart" value="100" oninput="handleConfigChange()">
         </div>
         <div class="config-group">
-            <label for="ptDesc">Desc (D)</label>
-            <input type="text" id="ptDesc" value="Point" oninput="handleConfigChange()">
+            <label for="ptDesc">Fallback Desc</label>
+            <input type="text" id="ptDesc" value="STAKE OUT" oninput="handleConfigChange()">
         </div>
     </div>
 
     <div class="actions">
-        <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Screen Data</button>
-        <button id="exportBtn" class="success" onclick="handleExportClick()">Export CSV</button>
+        <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Data</button>
+        <button id="exportBtn" class="success" onclick="handleExportClick()">Local CSV</button>
+        <button id="exportDxfBtn" class="cad" onclick="handleDxfExportClick()">Local DXF</button>
+        <button id="saveCloudCsvBtn" class="cloud" onclick="uploadFileToProject('csv')">Save CSV to Project</button>
+        <button id="saveCloudDxfBtn" class="cloud-dxf" onclick="uploadFileToProject('dxf')">Save DXF to Project</button>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th>Point ID (P)</th>
-                <th id="thCol1">Northing - Y</th>
-                <th id="thCol2">Easting - X</th>
-                <th id="thCol3">Elevation - Z</th>
-                <th>Description (D)</th>
-            </tr>
-        </thead>
-        <tbody id="pointTableBody">
-            <tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet. Add data to the screen and click Scrape.</td></tr>
-        </tbody>
-    </table>
+    <div class="table-wrapper">
+        <table>
+            <thead>
+                <tr>
+                    <th>Point ID (P)</th>
+                    <th id="thCol1">Northing - Y</th>
+                    <th id="thCol2">Easting - X</th>
+                    <th id="thCol3">Elevation - Z</th>
+                    <th>Description (D)</th>
+                </tr>
+            </thead>
+            <tbody id="pointTableBody">
+                <tr><td colspan="5" style="text-align:center; color:#999;">No data scraped yet. Place measurements and click Scrape.</td></tr>
+            </tbody>
+        </table>
+    </div>
 
     <script>
-        // Fires immediately to show the script block is actively compiled by the browser
-        const statusDiv = document.getElementById("statusBanner");
-        statusDiv.innerText = "Status: Connecting to Trimble Connect Workspace API...";
-        statusDiv.style.background = "#0288d1";
-        statusDiv.style.color = "white";
-
         let rawScrapedData = []; 
+        let rawScrapedLines = []; 
         let apiInstance = null;
+        const statusBanner = document.getElementById("statusBanner");
 
         async function initExtension() {
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("The Trimble SDK CDN script failed to load or was blocked by an adblocker/firewall.");
+                if (!TrimbleSDK) throw new Error("Trimble SDK library failed to load from CDN.");
                 
                 apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
-                statusDiv.innerText = "Status: Connected to Viewer! Ready to capture data.";
-                statusDiv.style.background = "#d4edda";
-                statusDiv.style.color = "#155724";
+                statusBanner.innerText = "Status: Connected to Viewer! Ready.";
+                statusBanner.style.background = "#d4edda";
+                statusBanner.style.color = "#155724";
             } catch (error) {
-                statusDiv.innerText = "Connection Error: " + error.message;
-                statusDiv.style.background = "#f8d7da";
-                statusDiv.style.color = "#721c24";
-                console.error("Initialization detail:", error);
+                statusBanner.innerText = "Connection Error: " + error.message;
+                statusBanner.style.background = "#f8d7da";
+                statusBanner.style.color = "#721c24";
             }
         }
 
@@ -132,17 +144,26 @@
             return { x: 0, y: 0, z: 0 };
         }
 
-        async function handleScrapeClick() {
-            if (!apiInstance || !apiInstance.markup) {
-                alert("Cannot scrape: Extension handshake with Trimble is incomplete.");
-                return;
+        function resolveLineCoords(meas) {
+            if (meas.start && meas.end) return { start: resolveRawMM(meas.start), end: resolveRawMM(meas.end) };
+            if (meas.positionX !== undefined && meas.position2X !== undefined) {
+                return {
+                    start: { x: meas.positionX, y: meas.positionY, z: meas.positionZ },
+                    end: { x: meas.position2X, y: meas.position2Y, z: meas.position2Z }
+                };
             }
+            return null;
+        }
 
+        async function handleScrapeClick() {
+            if (!apiInstance || !apiInstance.markup) return alert("Extension handshake incomplete.");
             try {
                 rawScrapedData = []; 
-                
+                rawScrapedLines = [];
+
                 const singlePoints = await apiInstance.markup.getSinglePointMarkups();
                 const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
+                const lineMarkups = await apiInstance.markup.getLineMarkups();
                 const textMarkups = await apiInstance.markup.getTextMarkups();
 
                 if (singlePoints && singlePoints.length > 0) {
@@ -152,19 +173,22 @@
                     });
                 }
 
-                if (linearMeasurements && linearMeasurements.length > 0) {
-                    linearMeasurements.forEach((meas) => {
-                        if (meas.start && meas.end) {
-                            let startCoords = resolveRawMM(meas.start);
-                            let endCoords = resolveRawMM(meas.end);
-                            
-                            let dx = endCoords.x - startCoords.x;
-                            let dy = endCoords.y - startCoords.y;
-                            let dz = endCoords.z - startCoords.z;
+                let lineSources = [];
+                if (linearMeasurements && linearMeasurements.length > 0) lineSources.push(...linearMeasurements);
+                if (lineMarkups && lineMarkups.length > 0) lineSources.push(...lineMarkups);
+
+                if (lineSources.length > 0) {
+                    lineSources.forEach((meas) => {
+                        let lineCoords = resolveLineCoords(meas);
+                        if (lineCoords) {
+                            let dx = lineCoords.end.x - lineCoords.start.x;
+                            let dy = lineCoords.end.y - lineCoords.start.y;
+                            let dz = lineCoords.end.z - lineCoords.start.z;
                             let calcLengthMm = Math.sqrt(dx*dx + dy*dy + dz*dz);
 
-                            rawScrapedData.push({ xMm: startCoords.x, yMm: startCoords.y, zMm: startCoords.z, type: "line", lineLenMm: calcLengthMm });
-                            rawScrapedData.push({ xMm: endCoords.x, yMm: endCoords.y, zMm: endCoords.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedData.push({ xMm: lineCoords.start.x, yMm: lineCoords.start.y, zMm: lineCoords.start.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedData.push({ xMm: lineCoords.end.x, yMm: lineCoords.end.y, zMm: lineCoords.end.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedLines.push({ start: lineCoords.start, end: lineCoords.end, lineLenMm: calcLengthMm });
                         }
                     });
                 }
@@ -178,21 +202,19 @@
                 }
 
                 updateTableUI();
-
                 if (rawScrapedData.length === 0) {
-                    alert("Scrape complete: Found 0 active measurements or text markups on-screen.");
+                    alert("Found 0 active markers on screen.");
                 } else {
-                    document.getElementById("statusBanner").innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
+                    statusBanner.innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
                 }
             } catch (err) {
-                alert("Scraper runtime exception: " + err.message);
+                alert("Scraper error: " + err.message);
             }
         }
 
         function convertValue(valInMm, targetUnit) {
             let num = parseFloat(valInMm);
             if (isNaN(num)) return "0.000";
-            
             switch(targetUnit) {
                 case "m":    return (num / 1000).toFixed(3);
                 case "in":   return (num / 25.4).toFixed(2);
@@ -203,14 +225,66 @@
             }
         }
 
+        function buildCsvString() {
+            const currentUnit = document.getElementById("unitSelect").value;
+            const formatOrder = document.getElementById("orderSelect").value;
+            const prefix = document.getElementById("ptPrefix").value;
+            let startNum = parseInt(document.getElementById("ptStart").value) || 1;
+            const fallbackDescription = document.getElementById("ptDesc").value;
+
+            let csvString = formatOrder === "NEZ" ? 
+                `Point Number,Northing (${currentUnit}),Easting (${currentUnit}),Elevation (${currentUnit}),Description\n` :
+                `Point Number,Easting (${currentUnit}),Northing (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+            
+            rawScrapedData.forEach((pt, index) => {
+                let pointNumber = prefix + (startNum + index);
+                let northing = convertValue(pt.yMm, currentUnit);
+                let easting = convertValue(pt.xMm, currentUnit);
+                let elevation = convertValue(pt.zMm, currentUnit);
+                let val1 = (formatOrder === "NEZ") ? northing : easting;
+                let val2 = (formatOrder === "NEZ") ? easting : northing;
+                
+                let pointDescription = fallbackDescription;
+                if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                    pointDescription = `Line: ${convertValue(pt.lineLenMm, currentUnit)} ${currentUnit}`;
+                } else if (pt.type === "text" && pt.customDesc) {
+                    pointDescription = `Markup: ${pt.customDesc}`;
+                }
+                csvString += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
+            });
+            return csvString;
+        }
+
+        function buildDxfString() {
+            const currentUnit = document.getElementById("unitSelect").value;
+            let dxf = ["0\nSECTION\n2\nHEADER\n0\nENDSEC\n0\nSECTION\n2\nENTITIES"];
+
+            rawScrapedData.forEach((pt) => {
+                dxf.push("0\nPOINT\n8\nSURVEY_POINTS", `10\n${convertValue(pt.xMm, currentUnit)}`, `20\n${convertValue(pt.yMm, currentUnit)}`, `30\n${convertValue(pt.zMm, currentUnit)}`);
+            });
+            rawScrapedLines.forEach((line) => {
+                dxf.push("0\nLINE\n8\nSURVEY_LINES", `10\n${convertValue(line.start.x, currentUnit)}`, `20\n${convertValue(line.start.y, currentUnit)}`, `30\n${convertValue(line.start.z, currentUnit)}`, `11\n${convertValue(line.end.x, currentUnit)}`, `21\n${convertValue(line.end.y, currentUnit)}`, `31\n${convertValue(line.end.z, currentUnit)}`);
+            });
+            dxf.push("0\nENDSEC\n0\nEOF\n");
+            return dxf.join("\n");
+        }
+
+        // Handles cleaning names for browser safety constraints
+        function resolveCleanFileName(extensionType) {
+            let userField = document.getElementById("fileNameInput").value.trim();
+            if (!userField) userField = "scraped_layout";
+            const dotIdx = userField.lastIndexOf(".");
+            if (dotIdx !== -1) userField = userField.substring(0, dotIdx);
+            userField = userField.replace(/[\\\/:*?"<>|]/g, "");
+            return `${userField}.${extensionType}`;
+        }
+
         function updateTableUI() {
             const tbody = document.getElementById("pointTableBody");
             const currentUnit = document.getElementById("unitSelect").value;
             const formatOrder = document.getElementById("orderSelect").value;
-            
             const prefix = document.getElementById("ptPrefix").value;
-            let startNum = parseInt(document.getElementById("ptStart").value);
-            if (isNaN(startNum)) startNum = 1;
+            let startNum = parseInt(document.getElementById("ptStart").value) || 1;
             const fallbackDescription = document.getElementById("ptDesc").value;
             
             if (formatOrder === "NEZ") {
@@ -233,7 +307,6 @@
                 let northing = convertValue(pt.yMm, currentUnit);
                 let easting = convertValue(pt.xMm, currentUnit);
                 let elevation = convertValue(pt.zMm, currentUnit);
-
                 let col1Value = (formatOrder === "NEZ") ? northing : easting;
                 let col2Value = (formatOrder === "NEZ") ? easting : northing;
                 
@@ -243,15 +316,7 @@
                 } else if (pt.type === "text" && pt.customDesc) {
                     pointDescription = `Markup: ${pt.customDesc}`;
                 }
-
-                tbody.innerHTML += `
-                    <tr>
-                        <td><b>${pointNumber}</b></td>
-                        <td>${col1Value}</td>
-                        <td>${col2Value}</td>
-                        <td>${elevation}</td>
-                        <td>${pointDescription}</td>
-                    </tr>`;
+                tbody.innerHTML += `<tr><td><b>${pointNumber}</b></td><td>${col1Value}</td><td>${col2Value}</td><td>${elevation}</td><td>${pointDescription}</td></tr>`;
             });
         }
 
@@ -260,61 +325,167 @@
         }
 
         function handleExportClick() {
-            if (rawScrapedData.length === 0) {
-                alert("Nothing to export! Place measurements on screen and click Scrape first.");
-                return;
-            }
-            
-            try {
-                const currentUnit = document.getElementById("unitSelect").value;
-                const formatOrder = document.getElementById("orderSelect").value;
-                const prefix = document.getElementById("ptPrefix").value;
-                let startNum = parseInt(document.getElementById("ptStart").value);
-                if (isNaN(startNum)) startNum = 1;
-                const fallbackDescription = document.getElementById("ptDesc").value;
+            if (rawScrapedData.length === 0) return alert("Nothing to export! Scrape first.");
+            const csvString = buildCsvString();
+            const fileName = resolveCleanFileName("csv");
 
-                let csvString = "";
-                if (formatOrder === "NEZ") {
-                    csvString = `Point Number,Northing (${currentUnit}),Easting (${currentUnit}),Elevation (${currentUnit}),Description\n`;
-                } else {
-                    csvString = `Point Number,Easting (${currentUnit}),Northing (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+            const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", blobUrl);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        }
+
+        function handleDxfExportClick() {
+            if (rawScrapedData.length === 0) return alert("Nothing to export! Scrape first.");
+            const dxfString = buildDxfString();
+            const fileName = resolveCleanFileName("dxf");
+
+            const blob = new Blob([dxfString], { type: "application/dxf" });
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", blobUrl);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        }
+
+        // Unified Multi-Format Cloud Processing Engine with Automated Folder Routing
+        async function uploadFileToProject(fileType) {
+            if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
+            
+            statusBanner.innerText = "Status: Authenticating cloud write tokens...";
+            statusBanner.style.background = "#0288d1";
+
+            try {
+                const token = await apiInstance.extension.requestPermission("accesstoken");
+                const project = await apiInstance.project.getProject();
+                
+                if (!token || !project || !project.id) {
+                    throw new Error("Could not capture project scope parameters from active layout window.");
+                }
+
+                statusBanner.innerText = "Status: Inspecting project directory paths...";
+                
+                let targetFolderId = project.id; // Fallback defaults directly to project root folder
+
+                // STAGE 1: Scan current layout contents to evaluate directory structures
+                try {
+                    const listUrl = `https://app.connect.trimble.com/tc/api/2.0/folders/${project.id}/items`;
+                    const listResponse = await fetch(listUrl, {
+                        method: "GET",
+                        headers: { "Authorization": `Bearer ${token}` }
+                    });
+
+                    if (listResponse.ok) {
+                        const items = await listResponse.json();
+                        const existingFolder = items.find(item => item.name === "Point Scraper files");
+                        
+                        if (existingFolder) {
+                            targetFolderId = existingFolder.id;
+                        } else {
+                            // STAGE 2: Folder instantiation fallback if directory checks turn up empty
+                            statusBanner.innerText = "Status: Generating 'Point Scraper files' folder...";
+                            const createFolderUrl = `https://app.connect.trimble.com/tc/api/2.0/folders?parentId=${project.id}`;
+                            const createResponse = await fetch(createFolderUrl, {
+                                method: "POST",
+                                headers: {
+                                    "Authorization": `Bearer ${token}`,
+                                    "Content-Type": "application/json"
+                                },
+                                body: JSON.stringify({ name: "Point Scraper files" })
+                            });
+                            
+                            if (createResponse.ok) {
+                                const newFolder = await createResponse.json();
+                                targetFolderId = newFolder.id;
+                            } else {
+                                // Secondary core asset creation routing check
+                                const altCreateUrl = `https://app.connect.trimble.com/tc/api/2.0/files?parentId=${project.id}`;
+                                const altResponse = await fetch(altCreateUrl, {
+                                    method: "POST",
+                                    headers: {
+                                        "Authorization": `Bearer ${token}`,
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({ name: "Point Scraper files", type: "folder" })
+                                });
+                                if (altResponse.ok) {
+                                    const altFolder = await altResponse.json();
+                                    targetFolderId = altFolder.id;
+                                }
+                            }
+                        }
+                    }
+                } catch (folderErr) {
+                    console.warn("Folder organization module warning. Reverting upload to root project folder context:", folderErr);
+                }
+
+                statusBanner.innerText = `Status: Transmitting ${fileType.toUpperCase()} file to target directory...`;
+                
+                let fileBody = "";
+                let mimeType = "";
+                if (fileType === "csv") {
+                    fileBody = buildCsvString();
+                    mimeType = "text/csv";
+                } else if (fileType === "dxf") {
+                    fileBody = buildDxfString();
+                    mimeType = "application/dxf";
                 }
                 
-                rawScrapedData.forEach((pt, index) => {
-                    let pointNumber = prefix + (startNum + index);
-                    let northing = convertValue(pt.yMm, currentUnit);
-                    let easting = convertValue(pt.xMm, currentUnit);
-                    let elevation = convertValue(pt.zMm, currentUnit);
-                    
-                    let val1 = (formatOrder === "NEZ") ? northing : easting;
-                    let val2 = (formatOrder === "NEZ") ? easting : northing;
-                    
-                    let pointDescription = fallbackDescription;
-                    if (pt.type === "line" && pt.lineLenMm !== undefined) {
-                        pointDescription = `Line: ${convertValue(pt.lineLenMm, currentUnit)} ${currentUnit}`;
-                    } else if (pt.type === "text" && pt.customDesc) {
-                        pointDescription = `Markup: ${pt.customDesc}`;
-                    }
+                const fileName = resolveCleanFileName(fileType);
 
-                    csvString += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
+                // STAGE 3: File placeholder initialization within our target folder ID
+                const initUrl = `https://app.connect.trimble.com/tc/api/2.0/files?parentId=${targetFolderId}`;
+                const response = await fetch(initUrl, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ name: fileName, type: "file" })
                 });
 
-                const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.setAttribute("href", blobUrl);
-                link.setAttribute("download", `scraped_${formatOrder.toLowerCase()}_${currentUnit}.csv`);
+                if (!response.ok) {
+                    const errDetail = await response.text();
+                    throw new Error(`Trimble server refused cloud placeholder initialization: ${errDetail}`);
+                }
+
+                const fileMeta = await response.json();
                 
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(blobUrl);
+                // STAGE 4: Direct binary stream transmission execution
+                const formData = new FormData();
+                const fileBlob = new Blob([fileBody], { type: mimeType });
+                formData.append("file", fileBlob, fileName);
+
+                const uploadUrl = `https://app.connect.trimble.com/tc/api/2.0/files/${fileMeta.id}/upload`;
+                const uploadRes = await fetch(uploadUrl, {
+                    method: "PUT",
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData
+                });
+
+                if (!uploadRes.ok) throw new Error("Binary chunk execution transmission drop.");
+
+                statusBanner.innerText = `Status: Saved ${fileType.toUpperCase()} successfully to Project folder!`;
+                statusBanner.style.background = "#2e7d32";
+                alert(`File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 Point Scraper files / 📄 ${fileName}`);
+
             } catch (err) {
-                alert("CSV generator execution crash: " + err.message);
+                statusBanner.innerText = "Cloud Sync Error: Check Console logs.";
+                statusBanner.style.background = "#f8d7da";
+                statusBanner.style.color = "#721c24";
+                alert("Cloud connection intercepted: " + err.message);
+                console.error(err);
             }
         }
 
-        // Start initialization immediately
         initExtension();
     </script>
 </body>
