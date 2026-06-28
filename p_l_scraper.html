@@ -7,7 +7,7 @@
     <style>
         body { font-family: Arial, sans-serif; padding: 12px; background: #fdfdfd; color: #333; margin: 0; }
         h3 { margin-top: 0; color: #007bc4; font-size: 16px; margin-bottom: 8px; }
-        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #0288d1; color: white; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; }
         
         /* Optimized Responsive Config Panel Layout */
         .config-container { background: #f0f4f8; padding: 10px; border-radius: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -35,8 +35,8 @@
 </head>
 <body>
 
-    <h3>PNEZD Scraper_4_1</h3>
-    <div id="statusBanner">Status: Connecting to Trimble Connect API...</div>
+    <h3>PNEZD Scraper_4_2</h3>
+    <div id="statusBanner">Status: Initializing script engine...</div>
     
     <div class="config-container">
         <div class="config-group">
@@ -103,6 +103,8 @@
         let rawScrapedData = []; 
         let rawScrapedLines = []; 
         let apiInstance = null;
+        let authToken = null; // Globally available authorized token memory
+        let currentProject = null; // Globally available project boundary details
         const statusBanner = document.getElementById("statusBanner");
 
         function getApiBaseUrl() {
@@ -124,7 +126,19 @@
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
                 if (!TrimbleSDK) throw new Error("Trimble SDK library failed to load from CDN.");
                 
-                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
+                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {
+                    if (event === "extension.accessToken" && args && args.data) {
+                        authToken = args.data; // Capture session lifetime token updates automatically
+                    }
+                }, 30000);
+                
+                statusBanner.innerText = "Status: Authenticating cloud access permissions...";
+                statusBanner.style.background = "#0288d1";
+                statusBanner.style.color = "white";
+                
+                // CRITICAL FIX: Request token/project configurations immediately at startup
+                authToken = await apiInstance.extension.requestPermission("accesstoken");
+                currentProject = await apiInstance.project.getProject();
                 
                 statusBanner.innerText = "Status: Connected to Viewer! Ready.";
                 statusBanner.style.background = "#d4edda";
@@ -369,33 +383,27 @@
             URL.revokeObjectURL(blobUrl);
         }
 
-        // RESTORED TWO-STAGE SECURITY CHANNEL SYNCHRONIZER
+        // ONE-STEP COMPACT MULTIPART CLOUD STREAM ENGINE
         async function uploadFileToProject(fileType) {
             if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
+            if (!authToken || !currentProject || !currentProject.id) {
+                return alert("Cloud connection down: Authentication sequence is incomplete. Try reloading the window.");
+            }
             
-            statusBanner.innerText = "Status: Authenticating cloud write tokens...";
+            statusBanner.innerText = "Status: Locating target project files folder...";
             statusBanner.style.background = "#0288d1";
             statusBanner.style.color = "white";
 
             try {
-                const token = await apiInstance.extension.requestPermission("accesstoken");
-                const project = await apiInstance.project.getProject();
-                
-                if (!token || !project || !project.id) {
-                    throw new Error("Could not capture project scope parameters from active layout window.");
-                }
-
                 const baseUrl = getApiBaseUrl();
-                statusBanner.innerText = "Status: Inspecting project directory paths...";
-                
-                let targetFolderId = project.id; 
+                let targetFolderId = currentProject.id; 
 
-                // STAGE 1: Verify / create target folder inside independent regional container
+                // Verify or create 'Point Scraper files' folder context
                 try {
-                    const listUrl = `${baseUrl}/folders/${project.id}/items`;
+                    const listUrl = `${baseUrl}/folders/${currentProject.id}/items`;
                     const listResponse = await fetch(listUrl, {
                         method: "GET",
-                        headers: { "Authorization": `Bearer ${token}` }
+                        headers: { "Authorization": `Bearer ${authToken}` }
                     });
 
                     if (listResponse.ok) {
@@ -405,11 +413,11 @@
                             if (existingFolder) {
                                 targetFolderId = existingFolder.id;
                             } else {
-                                statusBanner.innerText = "Status: Generating 'Point Scraper files' folder...";
-                                const createResponse = await fetch(`${baseUrl}/folders?parentId=${project.id}`, {
+                                statusBanner.innerText = "Status: Instantiating 'Point Scraper files' folder...";
+                                const createResponse = await fetch(`${baseUrl}/folders?parentId=${currentProject.id}`, {
                                     method: "POST",
                                     headers: {
-                                        "Authorization": `Bearer ${token}`,
+                                        "Authorization": `Bearer ${authToken}`,
                                         "Content-Type": "application/json"
                                     },
                                     body: JSON.stringify({ name: "Point Scraper files" })
@@ -423,11 +431,11 @@
                         }
                     }
                 } catch (folderErr) {
-                    console.warn("Folder automation bypassed, saving directly to project root.", folderErr);
-                    targetFolderId = project.id;
+                    console.warn("Folder manager failed, saving directly to project root context.", folderErr);
+                    targetFolderId = currentProject.id;
                 }
 
-                statusBanner.innerText = `Status: Preparing cloud placeholder...`;
+                statusBanner.innerText = `Status: Submitting ${fileType.toUpperCase()} file to Trimble servers...`;
                 
                 let fileBody = "";
                 let mimeType = "";
@@ -441,57 +449,35 @@
                 
                 const fileName = resolveCleanFileName(fileType);
 
-                // STAGE 2: Core metadata registration using clean JSON formatting
-                const initUrl = `${baseUrl}/files?parentId=${targetFolderId}`;
-                const response = await fetch(initUrl, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ 
-                        name: fileName,
-                        type: "file"
-                    })
-                });
-
-                if (!response.ok) {
-                    const errDetail = await response.text();
-                    throw new Error(`Server placeholder rejection: ${errDetail}`);
-                }
-
-                const fileMeta = await response.json();
-                if (!fileMeta || !fileMeta.id) {
-                    throw new Error("Trimble server response omitted valid entry ID metadata.");
-                }
-
-                statusBanner.innerText = `Status: Streaming ${fileType.toUpperCase()} file payload...`;
-
-                // STAGE 3: Streaming byte array data packages using a structured PUT channel 
+                // Pack data into a native Multipart Form object to bypass JSON validation
                 const formData = new FormData();
                 const fileBlob = new Blob([fileBody], { type: mimeType });
                 formData.append("file", fileBlob, fileName);
 
-                const uploadUrl = `${baseUrl}/files/${fileMeta.id}/upload`;
+                // Stream directly to the upload endpoint using a single POST operation
+                const uploadUrl = `${baseUrl}/files?parentId=${targetFolderId}`;
                 const uploadRes = await fetch(uploadUrl, {
-                    method: "PUT",
-                    headers: { "Authorization": `Bearer ${token}` },
+                    method: "POST",
+                    headers: { 
+                        "Authorization": `Bearer ${authToken}`
+                        // Leaving Content-Type blank lets the browser set boundary strings natively
+                    },
                     body: formData
                 });
 
                 if (!uploadRes.ok) {
                     const uploadErr = await uploadRes.text();
-                    throw new Error(`Payload byte stream rejected: ${uploadErr}`);
+                    throw new Error(`Server execution mismatch: ${uploadErr}`);
                 }
 
                 statusBanner.innerText = `Status: Saved ${fileType.toUpperCase()} successfully to Project folder!`;
                 statusBanner.style.background = "#2e7d32";
                 
-                let displayPath = targetFolderId === project.id ? "Project Root" : "Point Scraper files";
+                let displayPath = targetFolderId === currentProject.id ? "Project Root" : "Point Scraper files";
                 alert(`File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 ${displayPath} / 📄 ${fileName}`);
 
             } catch (err) {
-                statusBanner.innerText = "Cloud Sync Error: Check Console logs.";
+                statusBanner.innerText = "Cloud Sync Error. Operational fallback ready.";
                 statusBanner.style.background = "#f8d7da";
                 statusBanner.style.color = "#721c24";
                 alert("Cloud connection intercepted: " + err.message + "\n\nNote: Fallback to local downloading remains accessible below.");
