@@ -2,29 +2,25 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>PNEZD Survey, DXF & Cloud Scraper</title>
+    <title>PNEZD Survey & DXF Scraper</title>
     <script src="https://components.connect.trimble.com/trimble-connect-workspace-api/index.js"></script>
     <style>
         body { font-family: Arial, sans-serif; padding: 12px; background: #fdfdfd; color: #333; margin: 0; }
         h3 { margin-top: 0; color: #007bc4; font-size: 16px; margin-bottom: 8px; }
-        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; transition: all 0.3s ease; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; }
         
         .config-container { background: #f0f4f8; padding: 10px; border-radius: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
         .config-group { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         .config-group label { font-size: 11px; font-weight: bold; color: #34495e; }
         .config-group select, .config-group input { padding: 5px; font-size: 12px; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; width: 55%; }
         
-        .actions { margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
-        button { background: #0288d1; color: white; border: none; padding: 8px 6px; cursor: pointer; border-radius: 4px; font-weight: bold; flex: 1; font-size: 11px; min-width: 100px; }
+        .actions { margin-bottom: 12px; display: flex; gap: 6px; }
+        button { background: #0288d1; color: white; border: none; padding: 8px 6px; cursor: pointer; border-radius: 4px; font-weight: bold; flex: 1; font-size: 11px; }
         button:hover { background: #01579b; }
         button.success { background: #2e7d32; }
         button.success:hover { background: #1b5e20; }
         button.cad { background: #e65100; }
         button.cad:hover { background: #b53f00; }
-        button.cloud { background: #007bc4; }
-        button.cloud:hover { background: #005a91; }
-        button.cloud-dxf { background: #bf360c; }
-        button.cloud-dxf:hover { background: #870000; }
         
         .table-wrapper { width: 100%; overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 5px; }
@@ -49,7 +45,7 @@
                 <option value="m">Meters (m)</option>
                 <option value="in">Inches (in)</option>
                 <option value="ft">International Feet (ft)</option>
-                <option value="usft" selected>US Survey Feet (USft)</option>
+                <option value="usft">US Survey Feet (USft)</option>
             </select>
         </div>
         <div class="config-group">
@@ -69,7 +65,7 @@
         </div>
         <div class="config-group">
             <label for="ptDesc">Fallback Desc</label>
-            <input type="text" id="ptDesc" value="Points" oninput="handleConfigChange()">
+            <input type="text" id="ptDesc" value="Point" oninput="handleConfigChange()">
         </div>
     </div>
 
@@ -77,8 +73,6 @@
         <button id="scrapeBtn" onclick="handleScrapeClick()">Scrape Data</button>
         <button id="exportBtn" class="success" onclick="handleExportClick()">Local CSV</button>
         <button id="exportDxfBtn" class="cad" onclick="handleDxfExportClick()">Local DXF</button>
-        <button id="saveCloudCsvBtn" class="cloud" onclick="uploadFileToProject('csv')">Save CSV to Project</button>
-        <button id="saveCloudDxfBtn" class="cloud-dxf" onclick="uploadFileToProject('dxf')">Save DXF to Project</button>
     </div>
 
     <div class="table-wrapper">
@@ -99,46 +93,17 @@
     </div>
 
     <script>
-        const statusBanner = document.getElementById("statusBanner");
-        statusBanner.innerText = "Step 1: JavaScript Compiled! Initializing variables...";
-        statusBanner.style.background = "#0288d1";
-        statusBanner.style.color = "white";
-
         let rawScrapedData = []; 
         let rawScrapedLines = []; 
         let apiInstance = null;
-        let authToken = null; 
-        let currentProject = null; 
-
-        function getApiBaseUrl() {
-            const ref = document.referrer || "";
-            if (ref.includes("web21") || ref.includes("eu") || ref.includes("europe")) {
-                return "https://app21.connect.trimble.com/tc/api/2.0";
-            } else if (ref.includes("web22") || ref.includes("uk")) {
-                return "https://app22.connect.trimble.com/tc/api/2.0";
-            } else if (ref.includes("web31") || ref.includes("ap") || ref.includes("asia")) {
-                return "https://app31.connect.trimble.com/tc/api/2.0";
-            } else if (ref.includes("web32")) {
-                return "https://app32.connect.trimble.com/tc/api/2.0";
-            }
-            return "https://app.connect.trimble.com/tc/api/2.0";
-        }
+        const statusBanner = document.getElementById("statusBanner");
 
         async function initExtension() {
-            statusBanner.innerText = "Step 2: Verification loop active. Validating Trimble SDK...";
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
                 if (!TrimbleSDK) throw new Error("Trimble SDK library failed to load from CDN resource.");
                 
-                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {
-                    if (event === "extension.accessToken" && args && args.data) {
-                        authToken = args.data;
-                    }
-                }, 30000);
-                
-                statusBanner.innerText = "Step 3: Handshaking with Trimble Connect Viewer frame...";
-                authToken = await apiInstance.extension.requestPermission("accesstoken");
-                currentProject = await apiInstance.project.getProject();
+                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
                 try {
                     if (apiInstance.project && typeof apiInstance.project.getSettings === 'function') {
@@ -253,7 +218,7 @@
                 if (rawScrapedData.length === 0) {
                     alert("Found 0 active markers on screen.");
                 } else {
-                    statusBanner.innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
+                    statusBanner.innerText = "Status: Scraped " + rawScrapedData.length + " records successfully.";
                 }
             } catch (err) {
                 alert("Scraper error: " + err.message);
@@ -281,8 +246,8 @@
             const fallbackDescription = document.getElementById("ptDesc").value;
 
             let csvString = formatOrder === "NEZ" ? 
-                `Point Number,Northing (${currentUnit}),Easting (${currentUnit}),Elevation (${currentUnit}),Description\n` :
-                `Point Number,Easting (${currentUnit}),Northing (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+                "Point Number,Northing (" + currentUnit + "),Easting (" + currentUnit + "),Elevation (" + currentUnit + "),Description\n" :
+                "Point Number,Easting (" + currentUnit + "),Northing (" + currentUnit + "),Elevation (" + currentUnit + "),Description\n";
             
             rawScrapedData.forEach((pt, index) => {
                 let pointNumber = prefix + (startNum + index);
@@ -298,7 +263,7 @@
                 } else if (pt.type === "text" && pt.customDesc) {
                     pointDescription = "Markup: " + pt.customDesc;
                 }
-                csvString += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
+                csvString += '"' + pointNumber + '",' + val1 + "," + val2 + "," + elevation + ',"' + pointDescription + '"\n';
             });
             return csvString;
         }
@@ -358,7 +323,7 @@
 
             tbody.innerHTML = "";
             if (rawScrapedData.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>';
                 return;
             }
 
@@ -414,108 +379,6 @@
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(blobUrl);
-        }
-
-        // HIGHLY RESILIENT CLOUD SYNCHRONIZER WITH CORS DETECTION INTERCEPTOR
-        async function uploadFileToProject(fileType) {
-            if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
-            if (!authToken || !currentProject || !currentProject.id) {
-                return alert("Cloud connection down: Extension startup handshake is still unauthorized.");
-            }
-            
-            statusBanner.innerText = "Status: Locating target project files folder...";
-            statusBanner.style.background = "#0288d1";
-            statusBanner.style.color = "white";
-
-            try {
-                const baseUrl = getApiBaseUrl();
-                let targetFolderId = currentProject.id; 
-
-                try {
-                    const listUrl = baseUrl + "/folders/" + currentProject.id + "/items";
-                    const listResponse = await fetch(listUrl, {
-                        method: "GET",
-                        headers: { "Authorization": `Bearer " + authToken }
-                    });
-
-                    if (listResponse.ok) {
-                        const items = await listResponse.json();
-                        if (Array.isArray(items)) {
-                            const existingFolder = items.find(item => item.name === "Point Scraper files");
-                            if (existingFolder) {
-                                targetFolderId = existingFolder.id;
-                            } else {
-                                statusBanner.innerText = "Status: Instantiating 'Point Scraper files' folder...";
-                                const createResponse = await fetch(baseUrl + "/folders?parentId=" + currentProject.id, {
-                                    method: "POST",
-                                    headers: {
-                                        "Authorization": `Bearer " + authToken,
-                                        "Content-Type": "application/json"
-                                    },
-                                    body: JSON.stringify({ name: "Point Scraper files" })
-                                });
-                                
-                                if (createResponse.ok) {
-                                    const newFolder = await createResponse.json();
-                                    if (newFolder && newFolder.id) targetFolderId = newFolder.id;
-                                }
-                            }
-                        }
-                    }
-                } catch (folderErr) {
-                    console.warn("Folder manager failed, saving directly to project root context.", folderErr);
-                    targetFolderId = currentProject.id;
-                }
-
-                statusBanner.innerText = "Status: Submitting " + fileType.toUpperCase() + " file to Trimble servers...";
-                
-                let fileBody = "";
-                let mimeType = "";
-                if (fileType === "csv") {
-                    fileBody = buildCsvString();
-                    mimeType = "text/csv";
-                } else if (fileType === "dxf") {
-                    fileBody = buildDxfString();
-                    mimeType = "application/dxf";
-                }
-                
-                const fileName = resolveCleanFileName(fileType);
-
-                const formData = new FormData();
-                const fileBlob = new Blob([fileBody], { type: mimeType });
-                formData.append("file", fileBlob, fileName);
-
-                const uploadUrl = baseUrl + "/files?parentId=" + targetFolderId;
-                const uploadRes = await fetch(uploadUrl, {
-                    method: "POST",
-                    headers: { "Authorization": `Bearer " + authToken },
-                    body: formData
-                });
-
-                if (!uploadRes.ok) {
-                    const uploadErr = await uploadRes.text();
-                    throw new Error("Server execution mismatch: " + uploadErr);
-                }
-
-                statusBanner.innerText = "Status: Saved " + fileType.toUpperCase() + " successfully to Project folder!";
-                statusBanner.style.background = "#2e7d32";
-                
-                let displayPath = targetFolderId === currentProject.id ? "Project Root" : "Point Scraper files";
-                alert("File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 " + displayPath + " / 📄 " + fileName);
-
-            } catch (err) {
-                statusBanner.innerText = "Cloud Sync Error. Operational fallback ready.";
-                statusBanner.style.background = "#f8d7da";
-                statusBanner.style.color = "#721c24";
-                
-                // CATCHING CORS INTERCEPTIONS EXPLICITLY:
-                if (err.message === "Failed to fetch" || err.name === "TypeError") {
-                    alert("CORS Access Blocked: Your browser blocked writing to the Trimble Cloud.\n\nTo unblock direct cloud saving, a Project Administrator must copy your extension URL and paste it into the 'CORS Whitelist' tab inside Trimble Connect's project settings panel.");
-                } else {
-                    alert("Cloud connection intercepted: " + err.message + "\n\nNote: Fallback to local downloading remains accessible below.");
-                }
-                console.error(err);
-            }
         }
 
         initExtension();
