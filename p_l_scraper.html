@@ -7,7 +7,7 @@
     <style>
         body { font-family: Arial, sans-serif; padding: 12px; background: #fdfdfd; color: #333; margin: 0; }
         h3 { margin-top: 0; color: #007bc4; font-size: 16px; margin-bottom: 8px; }
-        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; }
+        #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; transition: all 0.3s ease; }
         
         /* Optimized Responsive Config Panel Layout */
         .config-container { background: #f0f4f8; padding: 10px; border-radius: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
@@ -35,7 +35,7 @@
 </head>
 <body>
 
-    <h3>PNEZD Scraper_4_3</h3>
+    <h3>PNEZD Scraper_4_4</h3>
     <div id="statusBanner">Status: Initializing script engine...</div>
     
     <div class="config-container">
@@ -50,7 +50,7 @@
                 <option value="m">Meters (m)</option>
                 <option value="in">Inches (in)</option>
                 <option value="ft">International Feet (ft)</option>
-                <option value="usft">US Survey Feet (USft)</option>
+                <option value="usft" selected>US Survey Feet (USft)</option>
             </select>
         </div>
         <div class="config-group">
@@ -100,12 +100,17 @@
     </div>
 
     <script>
+        // MILESTONE 1: Fires instantly to prove the browser successfully parsed and compiled the script structure
+        const statusBanner = document.getElementById("statusBanner");
+        statusBanner.innerText = "Step 1: JavaScript Compiled! Initializing variables...";
+        statusBanner.style.background = "#0288d1";
+        statusBanner.style.color = "white";
+
         let rawScrapedData = []; 
         let rawScrapedLines = []; 
         let apiInstance = null;
         let authToken = null; 
         let currentProject = null; 
-        const statusBanner = document.getElementById("statusBanner");
 
         function getApiBaseUrl() {
             const ref = document.referrer || "";
@@ -122,48 +127,42 @@
         }
 
         async function initExtension() {
+            // MILESTONE 2: Enter initialization routine loop
+            statusBanner.innerText = "Step 2: Verification loop active. Validating Trimble SDK...";
             try {
                 const TrimbleSDK = window.TrimbleConnectWorkspace || window.TrimbleConnectWorkspaceAPI;
-                if (!TrimbleSDK) throw new Error("Trimble SDK library failed to load from CDN.");
+                if (!TrimbleSDK) throw new Error("Trimble SDK library failed to load from CDN resource.");
                 
-                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {
-                    if (event === "extension.accessToken" && args && args.data) {
-                        authToken = args.data; 
-                    }
-                }, 30000);
+                // MILESTONE 3: Launch parent framework websocket connection channel
+                statusBanner.innerText = "Step 3: Handshaking with Trimble Connect Viewer frame...";
+                apiInstance = await TrimbleSDK.connect(window.parent, (event, args) => {}, 30000);
                 
-                statusBanner.innerText = "Status: Authenticating cloud access permissions...";
-                statusBanner.style.background = "#0288d1";
-                statusBanner.style.color = "white";
-                
+                // MILESTONE 4: Request active user permission scopes
+                statusBanner.innerText = "Step 4: Connection established! Fetching secure cloud access token...";
                 authToken = await apiInstance.extension.requestPermission("accesstoken");
+                
+                // MILESTONE 5: Pull current workspace project records context
+                statusBanner.innerText = "Step 5: Token authorized! Scanning active project settings...";
                 currentProject = await apiInstance.project.getProject();
                 
-                // UNIT DETECTION ENGINE: Asynchronously fetch active project settings context
+                // MILESTONE 6: Run defensive UI unit synchronization
                 try {
-                    const settings = await apiInstance.project.getSettings(); // Pull formatting layout rules
-                    if (settings) {
-                        let detected = "";
-                        if (settings.formatting && settings.formatting.lengthUnit) {
-                            detected = settings.formatting.lengthUnit;
-                        } else if (settings.lengthUnit) {
-                            detected = settings.lengthUnit;
-                        } else if (settings.unit) {
-                            detected = settings.unit;
-                        }
-
-                        if (detected) {
-                            detected = detected.toLowerCase();
-                            // Standardize variable patterns to match our option nodes
-                            if (detected.includes("millimeter") || detected === "mm") document.getElementById("unitSelect").value = "mm";
-                            else if (detected.includes("us") || detected.includes("survey") || detected === "usft") document.getElementById("unitSelect").value = "usft";
-                            else if (detected.includes("inch") || detected === "in") document.getElementById("unitSelect").value = "in";
-                            else if (detected.includes("meter") || detected === "m") document.getElementById("unitSelect").value = "m";
-                            else if (detected.includes("foot") || detected.includes("feet") || detected === "ft") document.getElementById("unitSelect").value = "ft";
+                    if (apiInstance.project && typeof apiInstance.project.getSettings === 'function') {
+                        const settings = await apiInstance.project.getSettings();
+                        if (settings) {
+                            let detected = settings.lengthUnit || settings.unit || (settings.formatting ? settings.formatting.lengthUnit : "");
+                            if (detected) {
+                                detected = detected.toLowerCase();
+                                if (detected.includes("millimeter") || detected === "mm") document.getElementById("unitSelect").value = "mm";
+                                else if (detected.includes("us") || detected.includes("survey") || detected === "usft") document.getElementById("unitSelect").value = "usft";
+                                else if (detected.includes("inch") || detected === "in") document.getElementById("unitSelect").value = "in";
+                                else if (detected.includes("meter") || detected === "m") document.getElementById("unitSelect").value = "m";
+                                else if (detected.includes("foot") || detected.includes("feet") || detected === "ft") document.getElementById("unitSelect").value = "ft";
+                            }
                         }
                     }
                 } catch (unitErr) {
-                    console.warn("Project baseline units unreachable, falling back to option list rules.", unitErr);
+                    console.warn("Project baseline units unreachable, falling back to menu defaults.", unitErr);
                 }
 
                 updateTableUI();
@@ -171,9 +170,10 @@
                 statusBanner.style.background = "#d4edda";
                 statusBanner.style.color = "#155724";
             } catch (error) {
-                statusBanner.innerText = "Connection Error: " + error.message;
+                statusBanner.innerText = "Initialization Error: " + error.message;
                 statusBanner.style.background = "#f8d7da";
                 statusBanner.style.color = "#721c24";
+                console.error("Crash details:", error);
             }
         }
 
@@ -196,4 +196,331 @@
                     if (sub.x !== undefined) return { x: sub.x, y: sub.y, z: sub.z };
                 }
             }
-            return { x
+            return { x: 0, y: 0, z: 0 };
+        }
+
+        function resolveLineCoords(meas) {
+            if (meas.start && meas.end) return { start: resolveRawMM(meas.start), end: resolveRawMM(meas.end) };
+            if (meas.positionX !== undefined && meas.position2X !== undefined) {
+                return {
+                    start: { x: meas.positionX, y: meas.positionY, z: meas.positionZ },
+                    end: { x: meas.position2X, y: meas.position2Y, z: meas.position2Z }
+                };
+            }
+            return null;
+        }
+
+        async function handleScrapeClick() {
+            if (!apiInstance || !apiInstance.markup) return alert("Extension handshake incomplete.");
+            try {
+                rawScrapedData = []; 
+                rawScrapedLines = [];
+
+                const singlePoints = await apiInstance.markup.getSinglePointMarkups();
+                const linearMeasurements = await apiInstance.markup.getMeasurementMarkups();
+                const lineMarkups = await apiInstance.markup.getLineMarkups();
+                const textMarkups = await apiInstance.markup.getTextMarkups();
+
+                if (singlePoints && singlePoints.length > 0) {
+                    singlePoints.forEach((pt) => {
+                        let mmCoords = resolveRawMM(pt);
+                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z, type: "point" });
+                    });
+                }
+
+                let lineSources = [];
+                if (linearMeasurements && linearMeasurements.length > 0) lineSources.push(...linearMeasurements);
+                if (lineMarkups && lineMarkups.length > 0) lineSources.push(...lineMarkups);
+
+                if (lineSources.length > 0) {
+                    lineSources.forEach((meas) => {
+                        let lineCoords = resolveLineCoords(meas);
+                        if (lineCoords) {
+                            let dx = lineCoords.end.x - lineCoords.start.x;
+                            let dy = lineCoords.end.y - lineCoords.start.y;
+                            let dz = lineCoords.end.z - lineCoords.start.z;
+                            let calcLengthMm = Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+                            rawScrapedData.push({ xMm: lineCoords.start.x, yMm: lineCoords.start.y, zMm: lineCoords.start.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedData.push({ xMm: lineCoords.end.x, yMm: lineCoords.end.y, zMm: lineCoords.end.z, type: "line", lineLenMm: calcLengthMm });
+                            rawScrapedLines.push({ start: lineCoords.start, end: lineCoords.end, lineLenMm: calcLengthMm });
+                        }
+                    });
+                }
+
+                if (textMarkups && textMarkups.length > 0) {
+                    textMarkups.forEach((tm) => {
+                        let mmCoords = resolveRawMM(tm);
+                        let typedText = tm.text || tm.content || tm.string || tm.value || "";
+                        rawScrapedData.push({ xMm: mmCoords.x, yMm: mmCoords.y, zMm: mmCoords.z, type: "text", customDesc: typedText.trim() });
+                    });
+                }
+
+                updateTableUI();
+                if (rawScrapedData.length === 0) {
+                    alert("Found 0 active markers on screen.");
+                } else {
+                    statusBanner.innerText = `Status: Scraped ${rawScrapedData.length} records successfully.`;
+                }
+            } catch (err) {
+                alert("Scraper error: " + err.message);
+            }
+        }
+
+        function convertValue(valInMm, targetUnit) {
+            let num = parseFloat(valInMm);
+            if (isNaN(num)) return "0.000";
+            switch(targetUnit) {
+                case "m":    return (num / 1000).toFixed(3);
+                case "in":   return (num / 25.4).toFixed(2);
+                case "ft":   return (num / 304.8).toFixed(3);
+                case "usft": return (num / 304.8006096).toFixed(3);
+                case "mm":
+                default:     return num.toFixed(1);
+            }
+        }
+
+        function buildCsvString() {
+            const currentUnit = document.getElementById("unitSelect").value;
+            const formatOrder = document.getElementById("orderSelect").value;
+            const prefix = document.getElementById("ptPrefix").value;
+            let startNum = parseInt(document.getElementById("ptStart").value) || 1;
+            const fallbackDescription = document.getElementById("ptDesc").value;
+
+            let csvString = formatOrder === "NEZ" ? 
+                `Point Number,Northing (${currentUnit}),Easting (${currentUnit}),Elevation (${currentUnit}),Description\n` :
+                `Point Number,Easting (${currentUnit}),Northing (${currentUnit}),Elevation (${currentUnit}),Description\n`;
+            
+            rawScrapedData.forEach((pt, index) => {
+                let pointNumber = prefix + (startNum + index);
+                let northing = convertValue(pt.yMm, currentUnit);
+                let easting = convertValue(pt.xMm, currentUnit);
+                let elevation = convertValue(pt.zMm, currentUnit);
+                let val1 = (formatOrder === "NEZ") ? northing : easting;
+                let val2 = (formatOrder === "NEZ") ? easting : northing;
+                
+                let pointDescription = fallbackDescription;
+                if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                    pointDescription = `Line: ${convertValue(pt.lineLenMm, currentUnit)} ${currentUnit}`;
+                } else if (pt.type === "text" && pt.customDesc) {
+                    pointDescription = `Markup: ${pt.customDesc}`;
+                }
+                csvString += `"${pointNumber}",${val1},${val2},${elevation},"${pointDescription}"\n`;
+            });
+            return csvString;
+        }
+
+        // Cleaned configuration properties (Removed all comments from interior blocks to bypass mini-parsers)
+        function buildDxfString() {
+            const currentUnit = document.getElementById("unitSelect").value;
+            let insunitsCode = 0; 
+            if (currentUnit === "in") insunitsCode = 1;
+            else if (currentUnit === "ft" || currentUnit === "usft") insunitsCode = 2; 
+            else if (currentUnit === "mm") insunitsCode = 4;
+            else if (currentUnit === "m") insunitsCode = 6;
+
+            let dxf = [];
+            dxf.push("0\nSECTION");
+            dxf.push("2\nHEADER");
+            dxf.push("9\n$INSUNITS");
+            dxf.push("70\n" + insunitsCode);
+            dxf.push("0\nENDSEC");
+            dxf.push("0\nSECTION");
+            dxf.push("2\nENTITIES");
+
+            rawScrapedData.forEach((pt) => {
+                dxf.push("0\nPOINT\n8\nSURVEY_POINTS", "10\n" + convertValue(pt.xMm, currentUnit), "20\n" + convertValue(pt.yMm, currentUnit), "30\n" + convertValue(pt.zMm, currentUnit));
+            });
+            rawScrapedLines.forEach((line) => {
+                dxf.push("0\nLINE\n8\nSURVEY_LINES", "10\n" + convertValue(line.start.x, currentUnit), "20\n" + convertValue(line.start.y, currentUnit), "30\n" + convertValue(line.start.z, currentUnit), "11\n" + convertValue(line.end.x, currentUnit), "21\n" + convertValue(line.end.y, currentUnit), "31\n" + convertValue(line.end.z, currentUnit));
+            });
+            dxf.push("0\nENDSEC\n0\nEOF\n");
+            return dxf.join("\n");
+        }
+
+        function resolveCleanFileName(extensionType) {
+            let userField = document.getElementById("fileNameInput").value.trim();
+            if (!userField) userField = "scraped_layout";
+            const dotIdx = userField.lastIndexOf(".");
+            if (dotIdx !== -1) userField = userField.substring(0, dotIdx);
+            userField = userField.replace(/[\\\/:*?"<>|]/g, "");
+            return userField + "." + extensionType;
+        }
+
+        function updateTableUI() {
+            const tbody = document.getElementById("pointTableBody");
+            const currentUnit = document.getElementById("unitSelect").value;
+            const formatOrder = document.getElementById("orderSelect").value;
+            const prefix = document.getElementById("ptPrefix").value;
+            let startNum = parseInt(document.getElementById("ptStart").value) || 1;
+            const fallbackDescription = document.getElementById("ptDesc").value;
+            
+            if (formatOrder === "NEZ") {
+                document.getElementById("thCol1").innerText = "Northing - Y (" + currentUnit + ")";
+                document.getElementById("thCol2").innerText = "Easting - X (" + currentUnit + ")";
+            } else {
+                document.getElementById("thCol1").innerText = "Easting - X (" + currentUnit + ")";
+                document.getElementById("thCol2").innerText = "Northing - Y (" + currentUnit + ")";
+            }
+            document.getElementById("thCol3").innerText = "Elevation - Z (" + currentUnit + ")";
+
+            tbody.innerHTML = "";
+            if (rawScrapedData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:#999;">No measurements scraped yet.</td></tr>`;
+                return;
+            }
+
+            rawScrapedData.forEach((pt, index) => {
+                let pointNumber = prefix + (startNum + index);
+                let northing = convertValue(pt.yMm, currentUnit);
+                let easting = convertValue(pt.xMm, currentUnit);
+                let elevation = convertValue(pt.zMm, currentUnit);
+                let col1Value = (formatOrder === "NEZ") ? northing : easting;
+                let col2Value = (formatOrder === "NEZ") ? easting : northing;
+                
+                let pointDescription = fallbackDescription;
+                if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                    pointDescription = "Line: " + convertValue(pt.lineLenMm, currentUnit) + " " + currentUnit;
+                } else if (pt.type === "text" && pt.customDesc) {
+                    pointDescription = "Markup: " + pt.customDesc;
+                }
+                tbody.innerHTML += "<tr><td><b>" + pointNumber + "</b></td><td>" + col1Value + "</td><td>" + col2Value + "</td><td>" + elevation + "</td><td>" + pointDescription + "</td></tr>";
+            });
+        }
+
+        function handleConfigChange() {
+            updateTableUI();
+        }
+
+        function handleExportClick() {
+            if (rawScrapedData.length === 0) return alert("Nothing to export! Scrape first.");
+            const csvString = buildCsvString();
+            const fileName = resolveCleanFileName("csv");
+
+            const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", blobUrl);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        }
+
+        function handleDxfExportClick() {
+            if (rawScrapedData.length === 0) return alert("Nothing to export! Scrape first.");
+            const dxfString = buildDxfString();
+            const fileName = resolveCleanFileName("dxf");
+
+            const blob = new Blob([dxfString], { type: "application/dxf" });
+            const blobUrl = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.setAttribute("href", blobUrl);
+            link.setAttribute("download", fileName);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(blobUrl);
+        }
+
+        async function uploadFileToProject(fileType) {
+            if (rawScrapedData.length === 0) return alert("No layout data to sync. Run a scrape sequence first.");
+            if (!authToken || !currentProject || !currentProject.id) {
+                return alert("Cloud connection down: Extension startup handshake is still unauthorized.");
+            }
+            
+            statusBanner.innerText = "Status: Locating target project files folder...";
+            statusBanner.style.background = "#0288d1";
+            statusBanner.style.color = "white";
+
+            try {
+                const baseUrl = getApiBaseUrl();
+                let targetFolderId = currentProject.id; 
+
+                try {
+                    const listUrl = baseUrl + "/folders/" + currentProject.id + "/items";
+                    const listResponse = await fetch(listUrl, {
+                        method: "GET",
+                        headers: { "Authorization": "Bearer " + authToken }
+                    });
+
+                    if (listResponse.ok) {
+                        const items = await listResponse.json();
+                        if (Array.isArray(items)) {
+                            const existingFolder = items.find(item => item.name === "Point Scraper files");
+                            if (existingFolder) {
+                                targetFolderId = existingFolder.id;
+                            } else {
+                                statusBanner.innerText = "Status: Instantiating 'Point Scraper files' folder...";
+                                const createResponse = await fetch(baseUrl + "/folders?parentId=" + currentProject.id, {
+                                    method: "POST",
+                                    headers: {
+                                        "Authorization": "Bearer " + authToken,
+                                        "Content-Type": "application/json"
+                                    },
+                                    body: JSON.stringify({ name: "Point Scraper files" })
+                                });
+                                
+                                if (createResponse.ok) {
+                                    const newFolder = await createResponse.json();
+                                    if (newFolder && newFolder.id) targetFolderId = newFolder.id;
+                                }
+                            }
+                        }
+                    }
+                } catch (folderErr) {
+                    console.warn("Folder manager failed, saving directly to project root context.", folderErr);
+                    targetFolderId = currentProject.id;
+                }
+
+                statusBanner.innerText = "Status: Submitting " + fileType.toUpperCase() + " file to Trimble servers...";
+                
+                let fileBody = "";
+                let mimeType = "";
+                if (fileType === "csv") {
+                    fileBody = buildCsvString();
+                    mimeType = "text/csv";
+                } else if (fileType === "dxf") {
+                    fileBody = buildDxfString();
+                    mimeType = "application/dxf";
+                }
+                
+                const fileName = resolveCleanFileName(fileType);
+
+                const formData = new FormData();
+                const fileBlob = new Blob([fileBody], { type: mimeType });
+                formData.append("file", fileBlob, fileName);
+
+                const uploadUrl = baseUrl + "/files?parentId=" + targetFolderId;
+                const uploadRes = await fetch(uploadUrl, {
+                    method: "POST",
+                    headers: { "Authorization": "Bearer " + authToken },
+                    body: formData
+                });
+
+                if (!uploadRes.ok) {
+                    const uploadErr = await uploadRes.text();
+                    throw new Error("Server execution mismatch: " + uploadErr);
+                }
+
+                statusBanner.innerText = "Status: Saved " + fileType.toUpperCase() + " successfully to Project folder!";
+                statusBanner.style.background = "#2e7d32";
+                
+                let displayPath = targetFolderId === currentProject.id ? "Project Root" : "Point Scraper files";
+                alert("File successfully synchronized directly into your Trimble Connect Project folder:\n\n📁 " + displayPath + " / 📄 " + fileName);
+
+            } catch (err) {
+                statusBanner.innerText = "Cloud Sync Error. Operational fallback ready.";
+                statusBanner.style.background = "#f8d7da";
+                statusBanner.style.color = "#721c24";
+                alert("Cloud connection intercepted: " + err.message + "\n\nNote: Fallback to local downloading remains accessible below.");
+                console.error(err);
+            }
+        }
+
+        // Fire initialization execution immediately upon verification of Step 1 completion
+        initExtension();
+    </script>
+</body>
+</html>
