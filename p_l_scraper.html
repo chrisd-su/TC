@@ -9,6 +9,7 @@
         h3 { margin-top: 0; color: #007bc4; font-size: 16px; margin-bottom: 8px; }
         #statusBanner { font-size: 12px; font-weight: bold; padding: 8px; border-radius: 4px; margin-bottom: 12px; background: #eee; color: #333; }
         
+        /* Optimized Responsive Config Panel Layout */
         .config-container { background: #f0f4f8; padding: 10px; border-radius: 4px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 8px; }
         .config-group { display: flex; align-items: center; justify-content: space-between; width: 100%; }
         .config-group label { font-size: 11px; font-weight: bold; color: #34495e; }
@@ -26,11 +27,28 @@
         table { width: 100%; border-collapse: collapse; margin-top: 5px; }
         th, td { border: 1px solid #ddd; padding: 6px; text-align: left; font-size: 11px; }
         th { background-color: #f4f4f4; font-weight: bold; }
+
+        /* Clean styles for the interactive grid input boxes */
+        .table-input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 3px 6px;
+            font-size: 11px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-family: Arial, sans-serif;
+            background: #fff;
+        }
+        .table-input:focus {
+            border-color: #007bc4;
+            background: #fff;
+            outline: none;
+        }
     </style>
 </head>
 <body>
 
-    <h3>PNEZD Scraper_4_5</h3>
+    <h3>PNEZD Scraper_4_6</h3>
     <div id="statusBanner">Status: Initializing script engine...</div>
     
     <div class="config-container">
@@ -238,12 +256,34 @@
             }
         }
 
+        // CENTRAL DESCRIPTION RESOLVER: Prioritizes manual user edits over computed strings
+        function getPointDescription(pt, index) {
+            if (pt.userDesc !== undefined) {
+                return pt.userDesc;
+            }
+            const currentUnit = document.getElementById("unitSelect").value;
+            const fallbackDescription = document.getElementById("ptDesc").value;
+
+            if (pt.type === "line" && pt.lineLenMm !== undefined) {
+                return "Line: " + convertValue(pt.lineLenMm, currentUnit) + " " + currentUnit;
+            } else if (pt.type === "text" && pt.customDesc) {
+                return "Markup: " + pt.customDesc;
+            }
+            return fallbackDescription;
+        }
+
+        // INPUT EVENT INTERCEPTOR: Stores the user text modification directly into the data array record
+        function handleDescEdit(index, value) {
+            if (rawScrapedData[index]) {
+                rawScrapedData[index].userDesc = value;
+            }
+        }
+
         function buildCsvString() {
             const currentUnit = document.getElementById("unitSelect").value;
             const formatOrder = document.getElementById("orderSelect").value;
             const prefix = document.getElementById("ptPrefix").value;
             let startNum = parseInt(document.getElementById("ptStart").value) || 1;
-            const fallbackDescription = document.getElementById("ptDesc").value;
 
             let csvString = formatOrder === "NEZ" ? 
                 "Point Number,Northing (" + currentUnit + "),Easting (" + currentUnit + "),Elevation (" + currentUnit + "),Description\n" :
@@ -257,12 +297,7 @@
                 let val1 = (formatOrder === "NEZ") ? northing : easting;
                 let val2 = (formatOrder === "NEZ") ? easting : northing;
                 
-                let pointDescription = fallbackDescription;
-                if (pt.type === "line" && pt.lineLenMm !== undefined) {
-                    pointDescription = "Line: " + convertValue(pt.lineLenMm, currentUnit) + " " + currentUnit;
-                } else if (pt.type === "text" && pt.customDesc) {
-                    pointDescription = "Markup: " + pt.customDesc;
-                }
+                let pointDescription = getPointDescription(pt, index);
                 csvString += '"' + pointNumber + '",' + val1 + "," + val2 + "," + elevation + ',"' + pointDescription + '"\n';
             });
             return csvString;
@@ -310,7 +345,6 @@
             const formatOrder = document.getElementById("orderSelect").value;
             const prefix = document.getElementById("ptPrefix").value;
             let startNum = parseInt(document.getElementById("ptStart").value) || 1;
-            const fallbackDescription = document.getElementById("ptDesc").value;
             
             if (formatOrder === "NEZ") {
                 document.getElementById("thCol1").innerText = "Northing - Y (" + currentUnit + ")";
@@ -335,13 +369,18 @@
                 let col1Value = (formatOrder === "NEZ") ? northing : easting;
                 let col2Value = (formatOrder === "NEZ") ? easting : northing;
                 
-                let pointDescription = fallbackDescription;
-                if (pt.type === "line" && pt.lineLenMm !== undefined) {
-                    pointDescription = "Line: " + convertValue(pt.lineLenMm, currentUnit) + " " + currentUnit;
-                } else if (pt.type === "text" && pt.customDesc) {
-                    pointDescription = "Markup: " + pt.customDesc;
-                }
-                tbody.innerHTML += "<tr><td><b>" + pointNumber + "</b></td><td>" + col1Value + "</td><td>" + col2Value + "</td><td>" + elevation + "</td><td>" + pointDescription + "</td></tr>";
+                let pointDescription = getPointDescription(pt, index);
+                
+                // Sanitize string quote instances to keep HTML input node structures from breaking
+                let safeDescription = pointDescription.replace(/'/g, "&apos;").replace(/"/g, "&quot;");
+
+                tbody.innerHTML += "<tr>" +
+                    "<td><b>" + pointNumber + "</b></td>" +
+                    "<td>" + col1Value + "</td>" +
+                    "<td>" + col2Value + "</td>" +
+                    "<td>" + elevation + "</td>" +
+                    "<td><input type='text' class='table-input' value='" + safeDescription + "' oninput='handleDescEdit(" + index + ", this.value)'></td>" +
+                    "</tr>";
             });
         }
 
